@@ -1,11 +1,6 @@
-# BCCDC-PHL COVID QC Site
+# BCCDC-PHL Routine Sequence QC Site
 
-This site is used for routine review of quality control data related to SARS-CoV-2 sequencing and genomic analysis.
-
-![site screenshot](doc/images/covid-qc-screenshot.png)
-
-A live demo is available [here](https://bccdc-phl.github.io/covid-qc/). Note that sample identifiers (`ERR...`) correspond to the [NCBI SRA](https://www.ncbi.nlm.nih.gov/sra)
-identifiers for the libraries that were used to generate the demo dataset.
+This site is used for routine review of quality control data for routine sequence data.
 
 ## Development Setup
 
@@ -39,9 +34,7 @@ A new CIDER REPL buffer will be created, resembling this:
 
 At the same time, a local dev instance of the site will be served from http://localhost:9500.
 
-From the `core.cljs` buffer, type `C-c M-n M-n` to switch the current REPL namespace to `covid-qc.core`. The REPL prompt should update to show the current namespace:
-
-![repl-ns-covid-qc-core](doc/images/repl-ns-covid-qc-core.png)
+From the `core.cljs` buffer, type `C-c M-n M-n` to switch the current REPL namespace to `routine-sequence-qc.core`. The REPL prompt should update to show the current namespace.
 
 You should now have a live REPL connection to the site. Open your browser's console:
 
