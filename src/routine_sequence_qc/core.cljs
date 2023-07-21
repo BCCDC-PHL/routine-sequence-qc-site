@@ -6,6 +6,7 @@
             [reagent.dom.server]
             [cljs-http.client :as http]
             [cljs.core.async :refer [<!]]
+            [semantic-ui-react :as semantic-ui]
             [ag-grid-react :as ag-grid]
             [ag-charts-react :as ag-chart]
             [cljs.pprint :refer [pprint]]))
@@ -36,8 +37,26 @@
 
 (defn load-sequencing-runs []
   ""
-  (go (let [response (<! (http/get (str url-prefix "data/runs.json")))]
-        (swap! db assoc-in [:runs] (:body response)))))
+  (go
+    (let [response (<! (http/get (str url-prefix "data/runs.json")))]
+      (swap! db assoc-in [:runs] (:body response)))))
+
+
+(defn load-library-qc [run-id]
+  ""
+  (go
+    (let [response (<! (http/get (str url-prefix "data/library-qc/" run-id "_library_qc.json")))]
+      (if (= 200 (:status response))
+        (swap! db assoc-in [:library-qc run-id] (:body response))))))
+
+
+(defn load-species-abundance [run-id]
+  ""
+  (go
+    (let [response (<! (http/get (str url-prefix "data/species-abundance/" run-id "_species_abundance.json")))]
+      (if (= 200 (:status response))
+        (swap! db assoc-in [:species-abundance run-id] (:body response))))))
+
 
 (defn debug-view []
   (let [current-debug (:debug-view @db)
@@ -52,7 +71,8 @@
 (defn header []
   [:header {:style {:display "grid"
                     :grid-template-columns "repeat(2, 1fr)"
-                    :align-items "center"}}
+                    :align-items "center"
+                    :height "48px"}}
    [:div {:style {:display "grid"
                   :grid-template-columns "repeat(2, 1fr)"
                   :align-items "center"}}
@@ -73,27 +93,29 @@
   (let [previously-selected-run-ids (:selected-run-ids @db)
         currently-selected-run-id (:run_id (first (get-selected-rows e)))]
     (do
+      (load-library-qc currently-selected-run-id)
+      (load-species-abundance currently-selected-run-id)
       (swap! db assoc-in [:selected-run-id] currently-selected-run-id))))
 
 
-(defn library-sequence-qc-selected [e]
-  ""
-  (do
-    (swap! db assoc-in [:selected-libraries] (get-selected-rows e))
-    ))
+(defn cell-renderer-hyperlink-button [text params]
+  (str "<button><a href=\"" (.-value params) "\" style=\"color: inherit; text-decoration: inherit\" target=\"_blank\">" text "</a></button>"))
 
+(defn cell-renderer-hyperlink-multiqc [params]
+  (cell-renderer-hyperlink-button "MultiQC" params))
 
-(defn library-species-abundance-selected [e]
-  ""
-  (do
-    (swap! db assoc-in [:selected-libraries] (get-selected-rows e))))
+(defn cell-renderer-hyperlink-fastqc-r1 [params]
+  (cell-renderer-hyperlink-button "FastQC R1" params))
 
+(defn cell-renderer-hyperlink-fastqc-r2 [params]
+  (cell-renderer-hyperlink-button "FastQC R2" params))
 
 
 (defn runs-table []
-  (let [row-data (map #(assoc {} :run_id (:run_id %)
-                                 :num_libraries (:num_libraries %))
-                      (:runs @db))]
+  (let [runs (:runs @db)
+        add-multiqc-link #(assoc % :multiqc_link (str url-prefix "data/multiqc/" (:run_id %) "_multiqc.html"))
+        row-data (->> runs
+                      (map add-multiqc-link))]
     [:div {:class "ag-theme-balham"
            :style {}}
      [:> ag-grid/AgGridReact
@@ -104,59 +126,68 @@
        :enableCellTextSelection true
        :onFirstDataRendered #(-> % .-api .sizeColumnsToFit)
        :onSelectionChanged run-selected}
-      [:> ag-grid/AgGridColumn {:field "run_id" :headerName "Run ID" :minWidth 265 :resizable true :filter "agTextColumnFilter" :sortable true :checkboxSelection true :sort "desc"}]]]))
+      [:> ag-grid/AgGridColumn {:field "run_id" :headerName "Run ID" :minWidth 200 :resizable true :filter "agTextColumnFilter" :sortable true :checkboxSelection true :sort "desc"}]
+      [:> ag-grid/AgGridColumn {:field "multiqc_link" :headerName "MultiQC" :maxWidth 128 :cellRenderer cell-renderer-hyperlink-multiqc}]]]))
 
 
-(defn cell-renderer-hyperlink-button [text params]
-  (str "<button><a href=\"" (.-value params) "\" style=\"color: inherit; text-decoration: inherit\" target=\"_blank\">" text "</a></button>"))
-
-(defn cell-renderer-hyperlink-multiqc [params]
-  (cell-renderer-hyperlink-button "MultiQC" params))
 
 (defn library-sequence-qc-table []
-  (let [join-by-comma #(clojure.string/join ", " %)
-        selected-library-qc-summary (get (:library-sequence-qc-summaries @db) (:selected-run-id @db))
-        row-data selected-library-qc-summary]
+  (let [currently-selected-run-id (:selected-run-id @db)
+        selected-run-library-qc (get-in @db [:library-qc currently-selected-run-id])
+        add-fastqc-r1-link #(assoc % :fastqc_r1_link (str url-prefix "data/fastqc/" currently-selected-run-id "/" (:library_id %) "_R1_fastqc.html"))
+        add-fastqc-r2-link #(assoc % :fastqc_r2_link (str url-prefix "data/fastqc/" currently-selected-run-id "/" (:library_id %) "_R2_fastqc.html"))
+        row-data (->> selected-run-library-qc
+                      (map (fn [x] (update x :total_bases #(.toFixed (/ % 1000000) 3))))
+                      (map (fn [x] (update x :percent_bases_above_q30 #(.toFixed % 2))))
+                      (map add-fastqc-r1-link)
+                      (map add-fastqc-r2-link))]
     [:div {:class "ag-theme-balham"
-           :style {:height 256}}
+           :style {}}
      [:> ag-grid/AgGridReact
       {:rowData row-data
        :pagination false
-       :rowSelection "multiple"
+       :enableCellTextSelection true
        :floatingFilter true
        :onFirstDataRendered #(-> % .-api .sizeColumnsToFit)
-       :onSelectionChanged library-sequence-qc-selected
+       :onSelectionChanged #()
        }
-      [:> ag-grid/AgGridColumn {:field "library_id" :headerName "Library ID" :maxWidth 200 :sortable true :resizable true :filter "agTextColumnFilter" :pinned "left" :checkboxSelection true :headerCheckboxSelectionFilteredOnly true}]
+      [:> ag-grid/AgGridColumn {:field "library_id" :headerName "Library ID" :maxWidth 200 :sortable true :resizable true :filter "agTextColumnFilter" :pinned "left" :checkboxSelection false :headerCheckboxSelectionFilteredOnly true}]
       [:> ag-grid/AgGridColumn {:field "project_id" :headerName "Project ID" :maxWidth 200 :sortable true :resizable true :filter "agTextColumnFilter"}]
-      [:> ag-grid/AgGridColumn {:field "inferred_species" :headerName "Inferred Species" :maxWidth 200 :sortable true :resizable true :filter "agTextColumnFilter"}]
-      [:> ag-grid/AgGridColumn {:field "total_bases" :maxWidth 140 :headerName "Total Bases" :sortable true :resizable true :filter "agNumberColumnFilter" :type "numericColumn"}]
-      [:> ag-grid/AgGridColumn {:field "percent_bases_above_q30" :maxWidth 140 :headerName "Bases Above Q30 (%)" :sortable true :resizable true :filter "agNumberColumnFilter" :type "numericColumn"}]
-      [:> ag-grid/AgGridColumn {:field "estimated_depth_coverage" :maxWidth 140 :headerName "Est. Depth Coverage" :sortable true :resizable true :filter "agNumberColumnFilter" :type "numericColumn"}]
-      [:> ag-grid/AgGridColumn {:field "multiqc_link" :headerName "MultiQC" :maxWidth 72 :cellRenderer cell-renderer-hyperlink-multiqc}]
+      [:> ag-grid/AgGridColumn {:field "inferred_species_name" :headerName "Inferred Species" :maxWidth 200 :sortable true :resizable true :filter "agTextColumnFilter"}]
+      [:> ag-grid/AgGridColumn {:field "genome_size" :maxWidth 140 :headerName "Genome Size (Mb)" :sortable true :resizable true :filter "agNumberColumnFilter" :type "numericColumn"}]
+      [:> ag-grid/AgGridColumn {:field "total_bases" :maxWidth 140 :headerName "Total Bases (Mb)" :sortable true :resizable true :filter "agNumberColumnFilter" :type "numericColumn"}]
+      [:> ag-grid/AgGridColumn {:field "percent_bases_above_q30" :maxWidth 160 :headerName "Bases Above Q30 (%)" :sortable true :resizable true :filter "agNumberColumnFilter" :type "numericColumn"}]
+      [:> ag-grid/AgGridColumn {:field "estimated_depth_coverage" :maxWidth 172 :headerName "Est. Depth Coverage" :sortable true :resizable true :filter "agNumberColumnFilter" :type "numericColumn"}]
+      [:> ag-grid/AgGridColumn {:field "fastqc_r1_link" :headerName "FastQC R1" :maxWidth 96 :cellRenderer cell-renderer-hyperlink-fastqc-r1}]
+      [:> ag-grid/AgGridColumn {:field "fastqc_r2_link" :headerName "FastQC R2" :maxWidth 96 :cellRenderer cell-renderer-hyperlink-fastqc-r2}]
       ]]
     ))
 
 
 (defn library-species-abundance-table []
-  (let [join-by-comma #(clojure.string/join ", " %)
-        selected-species-abundance (get (:library-species-abundance @db) (:selected-run-id @db))
-        row-data selected-species-abundance]
+  (let [currently-selected-run-id (:selected-run-id @db)
+        selected-run-species-abundance (get-in @db [:species-abundance currently-selected-run-id])
+        row-data (->> selected-run-species-abundance
+                      (map (fn [x] (update x :abundance_1_fraction_total_reads #(.toFixed (* 100 %) 2))))
+                      (map (fn [x] (update x :abundance_2_fraction_total_reads #(.toFixed (* 100 %) 2))))
+                      (map (fn [x] (update x :abundance_3_fraction_total_reads #(.toFixed (* 100 %) 2))))
+                      (map (fn [x] (update x :abundance_4_fraction_total_reads #(.toFixed (* 100 %) 2))))
+                      (map (fn [x] (update x :abundance_5_fraction_total_reads #(.toFixed (* 100 %) 2)))))]
     [:div {:class "ag-theme-balham"
-           :style {:height 256}}
+           :style {}}
      [:> ag-grid/AgGridReact
       {:rowData row-data
        :pagination false
-       :rowSelection "multiple"
+       :enableCellTextSelection true
        :floatingFilter true
        :onFirstDataRendered #(-> % .-api .sizeColumnsToFit)
-       :onSelectionChanged library-species-abundance-selected
+       :onSelectionChanged #()
        }
-      [:> ag-grid/AgGridColumn {:field "library_id" :headerName "Library ID" :maxWidth 200 :sortable true :resizable true :filter "agTextColumnFilter" :pinned "left" :checkboxSelection true :headerCheckboxSelectionFilteredOnly true}]
+      [:> ag-grid/AgGridColumn {:field "library_id" :headerName "Library ID" :maxWidth 200 :sortable true :resizable true :filter "agTextColumnFilter" :pinned "left" :checkboxSelection false :headerCheckboxSelectionFilteredOnly true}]
       [:> ag-grid/AgGridColumn {:field "project_id" :headerName "Project ID" :maxWidth 200 :sortable true :resizable true :filter "agTextColumnFilter"}]
       [:> ag-grid/AgGridColumn {:headerName "Most Abundant Species"}
        [:> ag-grid/AgGridColumn {:field "abundance_1_name" :maxWidth 140 :headerName "Species Name" :sortable true :resizable true :filter "agTextColumnFilter"}]
-       [:> ag-grid/AgGridColumn {:field "abundance_1_fraction_total_reads" :maxWidth 120 :headerName "Abundance (%)" :sortable true :resizable true :filter "agNumberColumnFilter" :type "numericColumn"}]]
+       [:> ag-grid/AgGridColumn {:field "abundance_1_fraction_total_reads" :maxWidth 120 :headerName "Abundance" :sortable true :resizable true :filter "agNumberColumnFilter" :type "numericColumn"}]]
       [:> ag-grid/AgGridColumn {:headerName "2nd Most Abundant Species"}
       [:> ag-grid/AgGridColumn {:field "abundance_2_name" :maxWidth 140 :headerName "Species Name" :sortable true :resizable true :filter "agTextColumnFilter"}]
        [:> ag-grid/AgGridColumn {:field "abundance_2_fraction_total_reads" :maxWidth 120 :headerName "Abundance (%)" :sortable true :resizable true :filter "agNumberColumnFilter" :type "numericColumn"}]]
@@ -177,28 +208,32 @@
 (defn root []
   [:div {:style {:display "grid"
                  :grid-template-columns "1fr"
-                 :grid-gap "4px 4px"}}
+                 :grid-gap "4px 4px"
+                 :height "100%"}}
 
    [header]
 
-   [:div {:style {:display "grid"
-                  :grid-template-columns "1fr 5fr"
-                  :grid-template-rows "repeat(2, 1fr)"
-                  :gap "4px"}}
+   
     [:div {:style {:display "grid"
-                   :grid-column "1"
-                   :grid-row "1 / 3"}}
-     [runs-table]]
-    [:div {:style {:display "grid"
-                   :grid-column "2"
-                   :grid-row "1"
-                   :gap "4px"}}
-     [library-sequence-qc-table]]
-    [:div {:style {:display "grid"
-                   :grid-column "2"
-                   :grid-row "2"}}
-     [library-species-abundance-table]]]   
-   [debug-view]
+                   :grid-template-columns "1fr 4fr"
+                   :grid-template-rows "repeat(2, 1fr)"
+                   :gap "4px"
+                   :height "800px"}}
+     [:div {:style {:display "grid"
+                    :grid-column "1"
+                    :grid-row "1 / 3"}}
+      [runs-table]]
+     [:div {:style {:display "grid"
+                    :grid-column "2"
+                    :grid-row "1"
+                    :gap "4px"}}
+      [library-sequence-qc-table]]
+     [:div {:style {:display "grid"
+                    :grid-column "2"
+                    :grid-row "2"}}
+      [library-species-abundance-table]]]   
+    [debug-view]
+
    ])
 
 (defn main []
