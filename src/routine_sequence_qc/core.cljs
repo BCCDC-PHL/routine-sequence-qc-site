@@ -111,7 +111,7 @@
   (cell-renderer-hyperlink-button "FastQC R2" params))
 
 
-(defn runs-table []
+(defn illumina-runs-table []
   (let [runs (:runs @db)
         add-multiqc-link #(assoc % :multiqc_link (str url-prefix "data/multiqc/" (:run_id %) "_multiqc.html"))
         row-data (->> runs
@@ -137,8 +137,9 @@
         add-fastqc-r1-link #(assoc % :fastqc_r1_link (str url-prefix "data/fastqc/" currently-selected-run-id "/" (:library_id %) "_R1_fastqc.html"))
         add-fastqc-r2-link #(assoc % :fastqc_r2_link (str url-prefix "data/fastqc/" currently-selected-run-id "/" (:library_id %) "_R2_fastqc.html"))
         row-data (->> selected-run-library-qc
-                      (map (fn [x] (update x :total_bases #(.toFixed (/ % 1000000) 3))))
-                      (map (fn [x] (update x :percent_bases_above_q30 #(.toFixed % 2))))
+                      (map (fn [x] (update x :inferred_species_percent #(if % (.toFixed % 2) 0.00))))
+                      (map (fn [x] (update x :total_bases #(if % (.toFixed (/ % 1000000) 3)))))
+                      (map (fn [x] (update x :percent_bases_above_q30 #(if % (.toFixed % 2)))))
                       (map add-fastqc-r1-link)
                       (map add-fastqc-r2-link))]
     [:div {:class "ag-theme-balham"
@@ -154,6 +155,7 @@
       [:> ag-grid/AgGridColumn {:field "library_id" :headerName "Library ID" :maxWidth 200 :sortable true :resizable true :filter "agTextColumnFilter" :pinned "left" :checkboxSelection false :headerCheckboxSelectionFilteredOnly true}]
       [:> ag-grid/AgGridColumn {:field "project_id" :headerName "Project ID" :maxWidth 200 :sortable true :resizable true :filter "agTextColumnFilter"}]
       [:> ag-grid/AgGridColumn {:field "inferred_species_name" :headerName "Inferred Species" :maxWidth 200 :sortable true :resizable true :filter "agTextColumnFilter"}]
+      [:> ag-grid/AgGridColumn {:field "inferred_species_percent" :maxWidth 160 :headerName "Species Reads (%)" :sortable true :resizable true :filter "agNumberColumnFilter" :type "numericColumn"}]
       [:> ag-grid/AgGridColumn {:field "genome_size" :maxWidth 140 :headerName "Genome Size (Mb)" :sortable true :resizable true :filter "agNumberColumnFilter" :type "numericColumn"}]
       [:> ag-grid/AgGridColumn {:field "total_bases" :maxWidth 140 :headerName "Total Bases (Mb)" :sortable true :resizable true :filter "agNumberColumnFilter" :type "numericColumn"}]
       [:> ag-grid/AgGridColumn {:field "percent_bases_above_q30" :maxWidth 160 :headerName "Bases Above Q30 (%)" :sortable true :resizable true :filter "agNumberColumnFilter" :type "numericColumn"}]
@@ -205,35 +207,41 @@
 
 
 
+(defn illumina []
+  [:div {:style {:display "grid"
+                  :grid-template-columns "1fr 4fr"
+                  :grid-template-rows "repeat(2, 1fr)"
+                  :gap "4px"
+                  :height "800px"}}
+   [:div {:style {:display "grid"
+                  :grid-column "1"
+                  :grid-row "1 / 3"}}
+    [illumina-runs-table]]
+   [:div {:style {:display "grid"
+                  :grid-column "2"
+                  :grid-row "1"
+                  :gap "4px"}}
+    [library-sequence-qc-table]]
+   [:div {:style {:display "grid"
+                  :grid-column "2"
+                  :grid-row "2"}}
+    [library-species-abundance-table]]])
+
+;; Preparing to have separate tabs for illumina and nanopore but not implemented yet.
+(defn tabs []
+  (let [panes [{:menuItem "Illumina" :render #(r/reactify-component [:> semantic-ui/Tab.Pane (r/reactify-component illumina)])}
+               {:menuItem "Nanopore" :render #(r/reactify-component [:> semantic-ui/Tab.Pane "Tab 2 content."])}]]
+    [:> semantic-ui/Tab {:panes panes}]))
+
+
 (defn root []
   [:div {:style {:display "grid"
                  :grid-template-columns "1fr"
                  :grid-gap "4px 4px"
                  :height "100%"}}
-
    [header]
-
-   
-    [:div {:style {:display "grid"
-                   :grid-template-columns "1fr 4fr"
-                   :grid-template-rows "repeat(2, 1fr)"
-                   :gap "4px"
-                   :height "800px"}}
-     [:div {:style {:display "grid"
-                    :grid-column "1"
-                    :grid-row "1 / 3"}}
-      [runs-table]]
-     [:div {:style {:display "grid"
-                    :grid-column "2"
-                    :grid-row "1"
-                    :gap "4px"}}
-      [library-sequence-qc-table]]
-     [:div {:style {:display "grid"
-                    :grid-column "2"
-                    :grid-row "2"}}
-      [library-species-abundance-table]]]   
-    [debug-view]
-
+   [illumina]
+   #_[debug-view]
    ])
 
 (defn main []
