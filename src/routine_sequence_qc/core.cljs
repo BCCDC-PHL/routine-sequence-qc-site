@@ -139,6 +139,7 @@
         row-data (->> selected-run-library-qc
                       (map (fn [x] (update x :inferred_species_percent #(if % (.toFixed % 2) 0.00))))
                       (map (fn [x] (update x :total_bases #(if % (.toFixed (/ % 1000000) 3)))))
+                      (map (fn [x] (update x :inferred_species_estimated_depth #(if % (.toFixed % 2) nil))))
                       (map (fn [x] (update x :percent_bases_above_q30 #(if % (.toFixed % 2)))))
                       (map add-fastqc-r1-link)
                       (map add-fastqc-r2-link))]
@@ -156,10 +157,10 @@
       [:> ag-grid/AgGridColumn {:field "project_id" :headerName "Project ID" :maxWidth 200 :sortable true :resizable true :filter "agTextColumnFilter"}]
       [:> ag-grid/AgGridColumn {:field "inferred_species_name" :headerName "Inferred Species" :maxWidth 200 :sortable true :resizable true :filter "agTextColumnFilter"}]
       [:> ag-grid/AgGridColumn {:field "inferred_species_percent" :maxWidth 160 :headerName "Species Reads (%)" :sortable true :resizable true :filter "agNumberColumnFilter" :type "numericColumn"}]
-      [:> ag-grid/AgGridColumn {:field "genome_size" :maxWidth 140 :headerName "Genome Size (Mb)" :sortable true :resizable true :filter "agNumberColumnFilter" :type "numericColumn"}]
+      [:> ag-grid/AgGridColumn {:field "inferred_species_genome_size_mb" :maxWidth 140 :headerName "Genome Size (Mb)" :sortable true :resizable true :filter "agNumberColumnFilter" :type "numericColumn"}]
       [:> ag-grid/AgGridColumn {:field "total_bases" :maxWidth 140 :headerName "Total Bases (Mb)" :sortable true :resizable true :filter "agNumberColumnFilter" :type "numericColumn"}]
       [:> ag-grid/AgGridColumn {:field "percent_bases_above_q30" :maxWidth 160 :headerName "Bases Above Q30 (%)" :sortable true :resizable true :filter "agNumberColumnFilter" :type "numericColumn"}]
-      [:> ag-grid/AgGridColumn {:field "estimated_depth_coverage" :maxWidth 172 :headerName "Est. Depth Coverage" :sortable true :resizable true :filter "agNumberColumnFilter" :type "numericColumn"}]
+      [:> ag-grid/AgGridColumn {:field "inferred_species_estimated_depth" :maxWidth 172 :headerName "Est. Depth Coverage" :sortable true :resizable true :filter "agNumberColumnFilter" :type "numericColumn"}]
       [:> ag-grid/AgGridColumn {:field "fastqc_r1_link" :headerName "FastQC R1" :maxWidth 96 :cellRenderer cell-renderer-hyperlink-fastqc-r1}]
       [:> ag-grid/AgGridColumn {:field "fastqc_r2_link" :headerName "FastQC R2" :maxWidth 96 :cellRenderer cell-renderer-hyperlink-fastqc-r2}]
       ]]
