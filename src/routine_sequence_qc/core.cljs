@@ -14,14 +14,15 @@
 (defonce db (r/atom {}))
 
 
-(def app-version "v3.0.0")
+(def app-version "v3.1.0")
 
 
 (defn load-sequencing-runs []
   ""
   (go
     (let [response (<! (http/get  "data/runs.json"))]
-      (swap! db assoc-in [:runs] (:body response)))))
+      (if (= 200 (:status response))
+        (swap! db assoc-in [:runs] (:body response))))))
 
 
 (defn load-library-qc [run-id]
@@ -92,6 +93,9 @@
 (defn cell-renderer-hyperlink-fastqc-r2 [params]
   (cell-renderer-hyperlink-button "FastQC R2" params))
 
+(defn cell-renderer-hyperlink-bracken [params]
+  (cell-renderer-hyperlink-button "Abundances" params))
+
 
 (defn illumina-runs-table []
   (let [runs (:runs @db)
@@ -153,9 +157,12 @@
 
 (defn library-species-abundance-table []
   (let [grid-ref (clj->js {:current nil})
+        add-bracken-link #(assoc % :bracken_link (str "data/bracken-species-abundances/" (:run_id %) "/" (:library_id %) "_bracken_species_abundances.tsv"))
         currently-selected-run-id (:selected-run-id @db)
         selected-run-species-abundance (get-in @db [:species-abundance currently-selected-run-id])
         row-data (->> selected-run-species-abundance
+                      (map #(assoc % :run_id currently-selected-run-id))
+                      (map add-bracken-link)
                       (map (fn [x] (update x :abundance_1_fraction_total_reads #(.toFixed (* 100 %) 2))))
                       (map (fn [x] (update x :abundance_2_fraction_total_reads #(.toFixed (* 100 %) 2))))
                       (map (fn [x] (update x :abundance_3_fraction_total_reads #(.toFixed (* 100 %) 2))))
@@ -174,6 +181,7 @@
         :onFirstDataRendered #(-> % .-api .sizeColumnsToFit)
         :onSelectionChanged #()}
        [:> ag-grid/AgGridColumn {:field "library_id" :headerName "Library ID" :maxWidth 200 :sortable true :resizable true :filter "agTextColumnFilter" :pinned "left" :checkboxSelection false :headerCheckboxSelectionFilteredOnly true :floatingFilter true}]
+       [:> ag-grid/AgGridColumn {:field "bracken_link" :headerName "Abundances" :maxWidth 128 :cellRenderer cell-renderer-hyperlink-bracken :floatingFilter false}]
        [:> ag-grid/AgGridColumn {:field "project_id" :headerName "Project ID" :maxWidth 200 :sortable true :resizable true :filter "agTextColumnFilter" :floatingFilter true}]
        [:> ag-grid/AgGridColumn {:headerName "Most Abundant Species"}
         [:> ag-grid/AgGridColumn {:field "abundance_1_name" :maxWidth 140 :headerName "Species Name" :sortable true :resizable true :filter "agTextColumnFilter" :floatingFilter true}]
