@@ -1,4 +1,4 @@
-(ns routine-sequence-qc.core
+(ns ^:figwheel-hooks routine-sequence-qc.core
   (:require-macros [cljs.core.async.macros :refer [go]])
   (:require [clojure.set]
             [reagent.core :as r] 
@@ -14,27 +14,30 @@
 (defonce db (r/atom {}))
 
 
-(def app-version "v3.1.0")
+(def app-version "v3.1.1")
 
 
-(defn load-sequencing-runs []
-  ""
+(defn load-sequencing-runs
+  "Pull the sequencing runs from the server and add them to the app db."
+  []
   (go
     (let [response (<! (http/get  "data/runs.json"))]
       (if (= 200 (:status response))
         (swap! db assoc-in [:runs] (:body response))))))
 
 
-(defn load-library-qc [run-id]
-  ""
+(defn load-library-qc
+  "Given a sequencing run ID, pull the library QC data for that run from the server and add it to the app db."
+  [run-id]
   (go
     (let [response (<! (http/get (str "data/library-qc/" run-id "_library_qc.json")))]
       (if (= 200 (:status response))
         (swap! db assoc-in [:library-qc run-id] (:body response))))))
 
 
-(defn load-species-abundance [run-id]
-  ""
+(defn load-species-abundance
+  "Given a sequencing run ID, pull the species abundance data for that run from the server and add it to the app db."
+  [run-id]
   (go
     (let [response (<! (http/get (str "data/species-abundance/" run-id "_species_abundance.json")))]
       (if (= 200 (:status response))
@@ -51,7 +54,9 @@
              (with-out-str (pprint (select-keys @db [:debug-view :selected-run-id])))]]]]))
 
 
-(defn header []
+(defn header
+  "Component for displaying the header."
+  []
   [:header {:style {:display "grid"
                     :grid-template-columns "repeat(2, 1fr)"
                     :align-items "center"
@@ -64,15 +69,18 @@
     [:img {:src (str "images/bccdc_logo.svg") :height "48px"}]]])
 
 
-(defn get-selected-rows [e]
+(defn get-selected-rows
+  "Function to get the selected rows from the runs table."
+  [e]
   (map #(js->clj (.-data %) :keywordize-keys true)
        (-> e
            .-api
            .getSelectedNodes)))
 
 
-(defn run-selected [e]
-  ""
+(defn run-selected
+  "Function to run when a row is selected in the runs table."
+  [e]
   (let [previously-selected-run-ids (:selected-run-ids @db)
         currently-selected-run-id (:run_id (first (get-selected-rows e)))]
     (do
@@ -97,11 +105,48 @@
   (cell-renderer-hyperlink-button "Abundances" params))
 
 
-(defn illumina-runs-table []
+(defn illumina-runs-table
+  "Component for displaying Illumina sequencing runs."
+  []
   (let [runs (:runs @db)
         add-multiqc-link #(assoc % :multiqc_link (str "data/multiqc/" (:run_id %) "_multiqc.html"))
+        qc-status-style (fn [params]
+                          (let [cell-value (. params -value)]
+                            (cond (= "PASS" cell-value) (clj->js {:backgroundColor "#6ade8a"})
+                                  (re-find #"PASS" cell-value) (clj->js {:backgroundColor "#6ade8a"})
+                                  (= "WARN" cell-value) (clj->js {:backgroundColor "#f5d76e"})
+                                  (= "FAIL" cell-value) (clj->js {:backgroundColor "#e6675e"})
+                                  :else (clj->js {:backgroundColor "#919191"}))))
+        add-qc-status (fn [run]
+                        (let [qc-status (get-in run [:run_qc_check :overall_qc_pass_fail])]
+                          (assoc run :run_qc_check_status qc-status)))
+        add-error-rate (fn [run]
+                         (let [checked-metrics (get-in run [:run_qc_check :checked_metrics])
+                               error-rate-check (filter #(= (:metric %) "ErrorRate") checked-metrics)
+                               error-rate (if (empty? error-rate-check)
+                                            nil
+                                            (:value (first error-rate-check)))]
+                           (assoc run :run_error_rate error-rate)))
+        add-percent-pf (fn [run]
+                         (let [checked-metrics (get-in run [:run_qc_check :checked_metrics])
+                               percent-pf-check (filter #(= (:metric %) "PercentPf") checked-metrics)
+                               percent-pf (if (empty? percent-pf-check)
+                                            nil
+                                            (:value (first percent-pf-check)))]
+                           (assoc run :run_percent_pf percent-pf)))
+        add-percent-q30 (fn [run]
+                          (let [checked-metrics (get-in run [:run_qc_check :checked_metrics])
+                                percent-q30-check (filter #(= (:metric %) "PercentGtQ30") checked-metrics)
+                                percent-q30 (if (empty? percent-q30-check)
+                                              nil
+                                              (:value (first percent-q30-check)))]
+                            (assoc run :run_percent_q30 percent-q30)))
         row-data (->> runs
-                      (map add-multiqc-link))]
+                      (map add-multiqc-link)
+                      (map add-qc-status)
+                      (map add-error-rate)
+                      (map add-percent-pf)
+                      (map add-percent-q30))]
     [:div {:class "ag-theme-balham"
            :style {}}
      [:> ag-grid/AgGridReact
@@ -112,11 +157,16 @@
        :onFirstDataRendered #(-> % .-api .sizeColumnsToFit)
        :onSelectionChanged run-selected}
       [:> ag-grid/AgGridColumn {:field "run_id" :headerName "Run ID" :minWidth 200 :resizable true :filter "agTextColumnFilter" :sortable true :checkboxSelection true :sort "desc" :floatingFilter true}]
-      [:> ag-grid/AgGridColumn {:field "multiqc_link" :headerName "MultiQC" :maxWidth 128 :cellRenderer cell-renderer-hyperlink-multiqc :floatingFilter true}]]]))
+      [:> ag-grid/AgGridColumn {:field "run_qc_check_status" :headerName "QC" :minWidth 72 :maxWidth 172 :resizable true :filter "agTextColumnFilter" :sortable true :floatingFilter true :cellStyle qc-status-style}]
+      [:> ag-grid/AgGridColumn {:field "multiqc_link" :headerName "MultiQC" :minWidth 96 :maxWidth 128 :resizable true :cellRenderer cell-renderer-hyperlink-multiqc :floatingFilter true}]
+      [:> ag-grid/AgGridColumn {:field "run_error_rate" :headerName "Error Rate" :minWidth 96 :maxWidth 128 :resizable true :filter "agNumberColumnFilter" :sortable true :floatingFilter true}]
+      [:> ag-grid/AgGridColumn {:field "run_percent_pf" :headerName "% Pass Filter" :minWidth 110 :maxWidth 128 :resizable true :filter "agNumberColumnFilter" :sortable true :floatingFilter true}]
+      [:> ag-grid/AgGridColumn {:field "run_percent_q30" :headerName "% Q30" :minWidth 96 :maxWidth 128 :resizable true :filter "agNumberColumnFilter" :sortable true :floatingFilter true}]]]))
 
 
-
-(defn library-sequence-qc-table []
+(defn library-sequence-qc-table
+  "Component for displaying library sequence QC data."
+  []
   (let [grid-ref (clj->js {:current nil})
         currently-selected-run-id (:selected-run-id @db)
         selected-run-library-qc (get-in @db [:library-qc currently-selected-run-id])
@@ -155,7 +205,9 @@
       [:button {:onClick #(.exportDataAsCsv (.-api (.-current grid-ref)) (clj->js {:fileName (str currently-selected-run-id "_library_qc.csv")}))} "Export CSV"]]]))
 
 
-(defn library-species-abundance-table []
+(defn library-species-abundance-table
+  "Component for displaying species abundance data."
+  []
   (let [grid-ref (clj->js {:current nil})
         add-bracken-link #(assoc % :bracken_link (str "data/bracken-species-abundances/" (:run_id %) "/" (:library_id %) "_bracken_species_abundances.tsv"))
         currently-selected-run-id (:selected-run-id @db)
@@ -202,28 +254,38 @@
       [:button {:onClick #(.exportDataAsCsv (.-api (.-current grid-ref)) (clj->js {:fileName (str currently-selected-run-id "_species_abundance.csv")}))} "Export CSV"]]]))
 
 
-
-(defn illumina []
+(defn illumina
+  "Component for displaying all illumina sequencing run QC data."
+  []
   [:div {:style {:display "grid"
-                  :grid-template-columns "1fr 4fr"
-                  :grid-template-rows "repeat(2, 1fr)"
-                  :gap "4px"
-                  :height "800px"}}
+                 :grid-template-columns "3fr 13fr"
+                 :grid-template-rows "repeat(2, 1fr)"
+                 :gap "4px"
+                 :height "800px"}}
    [:div {:style {:display "grid"
                   :grid-column "1"
-                  :grid-row "1 / 3"}}
+                  :grid-row "1 / 3"
+                  :overflow "auto"
+                  :resize "horizontal"}}
     [illumina-runs-table]]
    [:div {:style {:display "grid"
                   :grid-column "2"
                   :grid-row "1"
-                  :gap "4px"}}
+                  :gap "4px"
+                  :overflow "auto"
+                  :resize "horizontal"}}
     [library-sequence-qc-table]]
    [:div {:style {:display "grid"
                   :grid-column "2"
-                  :grid-row "2"}}
+                  :grid-row "2"
+                  :overflow "auto"
+                  :resize "horizontal"}}
     [library-species-abundance-table]]])
 
-(defn root []
+
+(defn root
+  "Root component."
+  []
   [:div {:style {:display "grid"
                  :grid-template-columns "1fr"
                  :grid-gap "4px 4px"
@@ -231,11 +293,28 @@
    [header]
    [illumina]])
 
-(defn main []
-  (load-sequencing-runs)
+
+(defn render
+  "Render the application."
+  []
   (rdom/render [root] (js/document.getElementById "app")))
 
+
+(defn ^:after-load re-render
+  "Re-render the application."
+  []
+  (render))
+
+
+(defn main
+  "Main entry-point."
+  []
+  (load-sequencing-runs)
+  (render))
+
+
 (set! (.-onload js/window) main)
+
 
 (comment
 
