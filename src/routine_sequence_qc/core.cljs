@@ -113,7 +113,9 @@
         qc-status-style (fn [params]
                           (let [cell-value (. params -value)]
                             (cond (= "PASS" cell-value) (clj->js {:backgroundColor "#6ade8a"})
-                                  (re-find #"PASS" cell-value) (clj->js {:backgroundColor "#6ade8a"})
+                                  (and (string? cell-value)
+                                       (re-find #"PASS" cell-value))
+                                       (clj->js {:backgroundColor "#6ade8a"})
                                   (= "WARN" cell-value) (clj->js {:backgroundColor "#f5d76e"})
                                   (= "FAIL" cell-value) (clj->js {:backgroundColor "#e6675e"})
                                   :else (clj->js {:backgroundColor "#919191"}))))

@@ -7,6 +7,7 @@ cp -r resources/public/css target/deploy/routine-sequence-qc
 cp -r resources/public/images target/deploy/routine-sequence-qc
 cp target/public/cljs-out/prod/main_bundle.js target/deploy/routine-sequence-qc/js/main.js
 cp resources/public/index_prod.html target/deploy/routine-sequence-qc/index.html
+cp resources/public/favicon.ico target/deploy/routine-sequence-qc/favicon.ico
 pushd target/deploy > /dev/null
 tar -czf routine-sequence-qc.tar.gz routine-sequence-qc
 rm -r routine-sequence-qc
