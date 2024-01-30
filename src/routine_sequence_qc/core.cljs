@@ -1,4 +1,4 @@
-(ns ^:figwheel-hooks routine-sequence-qc.core
+(ns routine-sequence-qc.core
   (:require-macros [cljs.core.async.macros :refer [go]])
   (:require [clojure.set]
             [reagent.core :as r] 
@@ -14,7 +14,7 @@
 (defonce db (r/atom {}))
 
 
-(def app-version "v3.1.1")
+(def app-version "v3.2.0")
 
 
 (defn load-sequencing-runs
@@ -302,12 +302,6 @@
   (rdom/render [root] (js/document.getElementById "app")))
 
 
-(defn ^:after-load re-render
-  "Re-render the application."
-  []
-  (render))
-
-
 (defn main
   "Main entry-point."
   []
@@ -315,7 +309,10 @@
   (render))
 
 
-(set! (.-onload js/window) main)
+(defn init
+  "Initialize the application."
+  []
+  (set! (.-onload js/window) main))
 
 
 (comment

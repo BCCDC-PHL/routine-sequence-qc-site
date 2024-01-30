@@ -3,7 +3,10 @@
 .calva
 .clj-kondo
 .lsp
+.shadow-cljs
 target
 node_modules
 resources/public/data
+resources/public/js
 scripts/copy_data.sh
+build-reports
