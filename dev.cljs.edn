@@ -1,5 +1,0 @@
-^{:css-dirs ["resources/public/css"]
-  :auto-bundle :webpack}
-{:main routine-sequence-qc.core
- :preloads [devtools.preload]
- :source-map true}
