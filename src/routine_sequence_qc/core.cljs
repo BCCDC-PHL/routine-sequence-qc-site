@@ -16,13 +16,17 @@
 
 (def app-version "v3.2.0")
 
+(def palette {:green "#6ade8a"
+              :yellow "#f5d76e"
+              :red "#e6675e"
+              :grey "#919191"})
 
 (defn load-sequencing-runs
   "Pull the sequencing runs from the server and add them to the app db."
   []
   (go
     (let [response (<! (http/get  "data/runs.json"))]
-      (if (= 200 (:status response))
+      (cond (= 200 (:status response))
         (swap! db assoc-in [:runs] (:body response))))))
 
 
@@ -31,7 +35,7 @@
   [run-id]
   (go
     (let [response (<! (http/get (str "data/library-qc/" run-id "_library_qc.json")))]
-      (if (= 200 (:status response))
+      (cond (= 200 (:status response))
         (swap! db assoc-in [:library-qc run-id] (:body response))))))
 
 
@@ -40,18 +44,8 @@
   [run-id]
   (go
     (let [response (<! (http/get (str "data/species-abundance/" run-id "_species_abundance.json")))]
-      (if (= 200 (:status response))
+      (cond (= 200 (:status response))
         (swap! db assoc-in [:species-abundance run-id] (:body response))))))
-
-
-(defn debug-view []
-  (let [current-debug (:debug-view @db)
-        toggle-debug #(swap! db assoc :debug-view (not current-debug))]
-    [:div
-     [:button {:on-click toggle-debug} "Toggle Debug View"]
-     [:div.debug {:style {:background-color "#CDCDCD" :display (if (:debug-view @db) "block" "none")}}
-      [:pre [:code {:style {:font-family "monospace" }}
-             (with-out-str (pprint (select-keys @db [:debug-view :selected-run-id])))]]]]))
 
 
 (defn header
@@ -112,13 +106,22 @@
         add-multiqc-link #(assoc % :multiqc_link (str "data/multiqc/" (:run_id %) "_multiqc.html"))
         qc-status-style (fn [params]
                           (let [cell-value (. params -value)]
-                            (cond (= "PASS" cell-value) (clj->js {:backgroundColor "#6ade8a"})
+                            (cond (= "PASS" cell-value) (clj->js {:backgroundColor (:green palette)})
                                   (and (string? cell-value)
                                        (re-find #"PASS" cell-value))
-                                       (clj->js {:backgroundColor "#6ade8a"})
-                                  (= "WARN" cell-value) (clj->js {:backgroundColor "#f5d76e"})
-                                  (= "FAIL" cell-value) (clj->js {:backgroundColor "#e6675e"})
-                                  :else (clj->js {:backgroundColor "#919191"}))))
+                                       (clj->js {:backgroundColor (:green palette)})
+                                  (= "WARN" cell-value) (clj->js {:backgroundColor (:yellow palette)})
+                                  (= "FAIL" cell-value) (clj->js {:backgroundColor (:red palette)})
+                                  :else (clj->js {:backgroundColor (:grey palette)}))))
+        qc-metric-style (fn [metric]
+                          (fn [params]
+                            (let [row-data (js->clj (. params -data) {:keywordize-keys true})
+                                  checked-metrics (get-in row-data [:run_qc_check :checked_metrics]) 
+                                  checked-metric (first (filter #(= (:metric %) metric) checked-metrics))
+                                  pass-fail (get-in checked-metric [:pass_fail])]
+                              (cond (= pass-fail "FAIL")
+                                    (clj->js {:backgroundColor (:red palette)})
+                                    :else (clj->js {})))))
         add-qc-status (fn [run]
                         (let [qc-status (get-in run [:run_qc_check :overall_qc_pass_fail])]
                           (assoc run :run_qc_check_status qc-status)))
@@ -158,12 +161,58 @@
        :enableCellTextSelection true
        :onFirstDataRendered #(-> % .-api .sizeColumnsToFit)
        :onSelectionChanged run-selected}
-      [:> ag-grid/AgGridColumn {:field "run_id" :headerName "Run ID" :minWidth 200 :resizable true :filter "agTextColumnFilter" :sortable true :checkboxSelection true :sort "desc" :floatingFilter true}]
-      [:> ag-grid/AgGridColumn {:field "run_qc_check_status" :headerName "QC" :minWidth 72 :maxWidth 172 :resizable true :filter "agTextColumnFilter" :sortable true :floatingFilter true :cellStyle qc-status-style}]
-      [:> ag-grid/AgGridColumn {:field "multiqc_link" :headerName "MultiQC" :minWidth 96 :maxWidth 128 :resizable true :cellRenderer cell-renderer-hyperlink-multiqc :floatingFilter true}]
-      [:> ag-grid/AgGridColumn {:field "run_error_rate" :headerName "Error Rate" :minWidth 96 :maxWidth 128 :resizable true :filter "agNumberColumnFilter" :sortable true :floatingFilter true}]
-      [:> ag-grid/AgGridColumn {:field "run_percent_pf" :headerName "% Pass Filter" :minWidth 110 :maxWidth 128 :resizable true :filter "agNumberColumnFilter" :sortable true :floatingFilter true}]
-      [:> ag-grid/AgGridColumn {:field "run_percent_q30" :headerName "% Q30" :minWidth 96 :maxWidth 128 :resizable true :filter "agNumberColumnFilter" :sortable true :floatingFilter true}]]]))
+      [:> ag-grid/AgGridColumn {:field "run_id"
+                                :headerName "Run ID"
+                                :minWidth 200
+                                :resizable true
+                                :filter "agTextColumnFilter"
+                                :sortable true
+                                :checkboxSelection true
+                                :sort "desc"
+                                :floatingFilter true}]
+      [:> ag-grid/AgGridColumn {:field "run_qc_check_status"
+                                :headerName "QC"
+                                :minWidth 72
+                                :maxWidth 172
+                                :resizable true
+                                :filter "agTextColumnFilter"
+                                :sortable true
+                                :floatingFilter true
+                                :cellStyle qc-status-style}]
+      [:> ag-grid/AgGridColumn {:field "multiqc_link"
+                                :headerName "MultiQC"
+                                :minWidth 96
+                                :maxWidth 128
+                                :resizable true
+                                :cellRenderer cell-renderer-hyperlink-multiqc
+                                :floatingFilter true}]
+      [:> ag-grid/AgGridColumn {:field "run_error_rate"
+                                :headerName "Error Rate"
+                                :minWidth 96
+                                :maxWidth 128
+                                :resizable true
+                                :filter "agNumberColumnFilter"
+                                :sortable true
+                                :floatingFilter true
+                                :cellStyle (qc-metric-style "ErrorRate")}]
+      [:> ag-grid/AgGridColumn {:field "run_percent_pf"
+                                :headerName "% Pass Filter"
+                                :minWidth 110
+                                :maxWidth 128
+                                :resizable true
+                                :filter "agNumberColumnFilter"
+                                :sortable true
+                                :floatingFilter true
+                                :cellStyle (qc-metric-style "PercentPf")}]
+      [:> ag-grid/AgGridColumn {:field "run_percent_q30"
+                                :headerName "% Q30"
+                                :minWidth 96
+                                :maxWidth 128
+                                :resizable true
+                                :filter "agNumberColumnFilter"
+                                :sortable true
+                                :floatingFilter true
+                                :cellStyle (qc-metric-style "PercentGtQ30")}]]]))
 
 
 (defn library-sequence-qc-table
@@ -193,16 +242,78 @@
         :enableCellTextSelection true
         :onFirstDataRendered #(-> % .-api .sizeColumnsToFit)
         :onSelectionChanged #()}
-       [:> ag-grid/AgGridColumn {:field "library_id" :headerName "Library ID" :maxWidth 200 :sortable true :resizable true :filter "agTextColumnFilter" :pinned "left" :checkboxSelection false :headerCheckboxSelectionFilteredOnly true :floatingFilter true}]
-       [:> ag-grid/AgGridColumn {:field "project_id" :headerName "Project ID" :maxWidth 200 :sortable true :resizable true :filter "agTextColumnFilter" :floatingFilter true}]
-       [:> ag-grid/AgGridColumn {:field "inferred_species_name" :headerName "Inferred Species" :maxWidth 200 :sortable true :resizable true :filter "agTextColumnFilter" :floatingFilter true}]
-       [:> ag-grid/AgGridColumn {:field "inferred_species_percent" :maxWidth 160 :headerName "Species Reads (%)" :sortable true :resizable true :filter "agNumberColumnFilter" :type "numericColumn" :floatingFilter true}]
-       [:> ag-grid/AgGridColumn {:field "inferred_species_genome_size_mb" :maxWidth 140 :headerName "Genome Size (Mb)" :sortable true :resizable true :filter "agNumberColumnFilter" :type "numericColumn" :floatingFilter true}]
-       [:> ag-grid/AgGridColumn {:field "total_bases" :maxWidth 140 :headerName "Total Bases (Mb)" :sortable true :resizable true :filter "agNumberColumnFilter" :type "numericColumn" :floatingFilter true}]
-       [:> ag-grid/AgGridColumn {:field "percent_bases_above_q30" :maxWidth 160 :headerName "Bases Above Q30 (%)" :sortable true :resizable true :filter "agNumberColumnFilter" :type "numericColumn" :floatingFilter true}]
-       [:> ag-grid/AgGridColumn {:field "inferred_species_estimated_depth" :maxWidth 172 :headerName "Est. Depth Coverage" :sortable true :resizable true :filter "agNumberColumnFilter" :type "numericColumn" :floatingFilter true}]
-       [:> ag-grid/AgGridColumn {:field "fastqc_r1_link" :headerName "FastQC R1" :maxWidth 96 :cellRenderer cell-renderer-hyperlink-fastqc-r1}]
-       [:> ag-grid/AgGridColumn {:field "fastqc_r2_link" :headerName "FastQC R2" :maxWidth 96 :cellRenderer cell-renderer-hyperlink-fastqc-r2}]]]
+       [:> ag-grid/AgGridColumn {:field "library_id"
+                                 :headerName "Library ID"
+                                 :maxWidth 200
+                                 :sortable true
+                                 :resizable true
+                                 :filter "agTextColumnFilter"
+                                 :pinned "left"
+                                 :checkboxSelection false
+                                 :headerCheckboxSelectionFilteredOnly true
+                                 :floatingFilter true}]
+       [:> ag-grid/AgGridColumn {:field "project_id"
+                                 :headerName "Project ID"
+                                 :maxWidth 200
+                                 :sortable true
+                                 :resizable true
+                                 :filter "agTextColumnFilter"
+                                 :floatingFilter true}]
+       [:> ag-grid/AgGridColumn {:field "inferred_species_name"
+                                 :headerName "Inferred Species"
+                                 :maxWidth 200
+                                 :sortable true
+                                 :resizable true
+                                 :filter "agTextColumnFilter"
+                                 :floatingFilter true}]
+       [:> ag-grid/AgGridColumn {:field "inferred_species_percent"
+                                 :maxWidth 160
+                                 :headerName "Species Reads (%)"
+                                 :sortable true
+                                 :resizable true
+                                 :filter "agNumberColumnFilter"
+                                 :type "numericColumn"
+                                 :floatingFilter true}]
+       [:> ag-grid/AgGridColumn {:field "inferred_species_genome_size_mb"
+                                 :maxWidth 140
+                                 :headerName "Genome Size (Mb)"
+                                 :sortable true
+                                 :resizable true
+                                 :filter "agNumberColumnFilter"
+                                 :type "numericColumn"
+                                 :floatingFilter true}]
+       [:> ag-grid/AgGridColumn {:field "total_bases"
+                                 :maxWidth 140
+                                 :headerName "Total Bases (Mb)"
+                                 :sortable true
+                                 :resizable true
+                                 :filter "agNumberColumnFilter"
+                                 :type "numericColumn"
+                                 :floatingFilter true}]
+       [:> ag-grid/AgGridColumn {:field "percent_bases_above_q30"
+                                 :maxWidth 160
+                                 :headerName "Bases Above Q30 (%)"
+                                 :sortable true
+                                 :resizable true
+                                 :filter "agNumberColumnFilter"
+                                 :type "numericColumn"
+                                 :floatingFilter true}]
+       [:> ag-grid/AgGridColumn {:field "inferred_species_estimated_depth"
+                                 :maxWidth 172
+                                 :headerName "Est. Depth Coverage"
+                                 :sortable true
+                                 :resizable true
+                                 :filter "agNumberColumnFilter"
+                                 :type "numericColumn"
+                                 :floatingFilter true}]
+       [:> ag-grid/AgGridColumn {:field "fastqc_r1_link"
+                                 :headerName "FastQC R1"
+                                 :maxWidth 96
+                                 :cellRenderer cell-renderer-hyperlink-fastqc-r1}]
+       [:> ag-grid/AgGridColumn {:field "fastqc_r2_link"
+                                 :headerName "FastQC R2"
+                                 :maxWidth 96
+                                 :cellRenderer cell-renderer-hyperlink-fastqc-r2}]]]
      [:div {:style {:grid-row "2"}}
       [:button {:onClick #(.exportDataAsCsv (.-api (.-current grid-ref)) (clj->js {:fileName (str currently-selected-run-id "_library_qc.csv")}))} "Export CSV"]]]))
 
@@ -234,24 +345,108 @@
         :enableCellTextSelection true
         :onFirstDataRendered #(-> % .-api .sizeColumnsToFit)
         :onSelectionChanged #()}
-       [:> ag-grid/AgGridColumn {:field "library_id" :headerName "Library ID" :maxWidth 200 :sortable true :resizable true :filter "agTextColumnFilter" :pinned "left" :checkboxSelection false :headerCheckboxSelectionFilteredOnly true :floatingFilter true}]
-       [:> ag-grid/AgGridColumn {:field "bracken_link" :headerName "Abundances" :maxWidth 128 :cellRenderer cell-renderer-hyperlink-bracken :floatingFilter false}]
-       [:> ag-grid/AgGridColumn {:field "project_id" :headerName "Project ID" :maxWidth 200 :sortable true :resizable true :filter "agTextColumnFilter" :floatingFilter true}]
+       [:> ag-grid/AgGridColumn {:field "library_id"
+                                 :headerName "Library ID"
+                                 :maxWidth 200
+                                 :sortable true
+                                 :resizable true
+                                 :filter "agTextColumnFilter"
+                                 :pinned "left"
+                                 :checkboxSelection false
+                                 :headerCheckboxSelectionFilteredOnly true
+                                 :floatingFilter true}]
+       [:> ag-grid/AgGridColumn {:field "bracken_link"
+                                 :headerName "Abundances"
+                                 :maxWidth 128
+                                 :cellRenderer cell-renderer-hyperlink-bracken
+                                 :floatingFilter false}]
+       [:> ag-grid/AgGridColumn {:field "project_id"
+                                 :headerName "Project ID"
+                                 :maxWidth 200
+                                 :sortable true
+                                 :resizable true
+                                 :filter "agTextColumnFilter"
+                                 :floatingFilter true}]
        [:> ag-grid/AgGridColumn {:headerName "Most Abundant Species"}
-        [:> ag-grid/AgGridColumn {:field "abundance_1_name" :maxWidth 140 :headerName "Species Name" :sortable true :resizable true :filter "agTextColumnFilter" :floatingFilter true}]
-        [:> ag-grid/AgGridColumn {:field "abundance_1_fraction_total_reads" :maxWidth 120 :headerName "Abundance" :sortable true :resizable true :filter "agNumberColumnFilter" :type "numericColumn" :floatingFilter true}]]
+        [:> ag-grid/AgGridColumn {:field "abundance_1_name"
+                                  :maxWidth 140
+                                  :headerName "Species Name"
+                                  :sortable true
+                                  :resizable true
+                                  :filter "agTextColumnFilter"
+                                  :floatingFilter true}]
+        [:> ag-grid/AgGridColumn {:field "abundance_1_fraction_total_reads"
+                                  :maxWidth 120
+                                  :headerName "Abundance"
+                                  :sortable true
+                                  :resizable true
+                                  :filter "agNumberColumnFilter"
+                                  :type "numericColumn"
+                                  :floatingFilter true}]]
        [:> ag-grid/AgGridColumn {:headerName "2nd Most Abundant Species"}
-        [:> ag-grid/AgGridColumn {:field "abundance_2_name" :maxWidth 140 :headerName "Species Name" :sortable true :resizable true :filter "agTextColumnFilter" :floatingFilter true}]
-        [:> ag-grid/AgGridColumn {:field "abundance_2_fraction_total_reads" :maxWidth 120 :headerName "Abundance (%)" :sortable true :resizable true :filter "agNumberColumnFilter" :type "numericColumn" :floatingFilter true}]]
+        [:> ag-grid/AgGridColumn {:field "abundance_2_name"
+                                  :maxWidth 140
+                                  :headerName "Species Name"
+                                  :sortable true
+                                  :resizable true
+                                  :filter "agTextColumnFilter"
+                                  :floatingFilter true}]
+        [:> ag-grid/AgGridColumn {:field "abundance_2_fraction_total_reads"
+                                  :maxWidth 120
+                                  :headerName "Abundance (%)"
+                                  :sortable true
+                                  :resizable true
+                                  :filter "agNumberColumnFilter"
+                                  :type "numericColumn"
+                                  :floatingFilter true}]]
        [:> ag-grid/AgGridColumn {:headerName "3rd Most Abundant Species"}
-        [:> ag-grid/AgGridColumn {:field "abundance_3_name" :maxWidth 140 :headerName "Species Name" :sortable true :resizable true :filter "agTextColumnFilter" :floatingFilter true}]
-        [:> ag-grid/AgGridColumn {:field "abundance_3_fraction_total_reads" :maxWidth 120 :headerName "Abundance (%)" :sortable true :resizable true :filter "agNumberColumnFilter" :type "numericColumn" :floatingFilter true}]]
+        [:> ag-grid/AgGridColumn {:field "abundance_3_name"
+                                  :maxWidth 140
+                                  :headerName "Species Name"
+                                  :sortable true
+                                  :resizable true
+                                  :filter "agTextColumnFilter"
+                                  :floatingFilter true}]
+        [:> ag-grid/AgGridColumn {:field "abundance_3_fraction_total_reads"
+                                  :maxWidth 120
+                                  :headerName "Abundance (%)"
+                                  :sortable true
+                                  :resizable true
+                                  :filter "agNumberColumnFilter"
+                                  :type "numericColumn"
+                                  :floatingFilter true}]]
        [:> ag-grid/AgGridColumn {:headerName "4th Most Abundant Species"}
-        [:> ag-grid/AgGridColumn {:field "abundance_4_name" :maxWidth 140 :headerName "Species Name" :sortable true :resizable true :filter "agTextColumnFilter" :floatingFilter true}]
-        [:> ag-grid/AgGridColumn {:field "abundance_4_fraction_total_reads" :maxWidth 120 :headerName "Abundance (%)" :sortable true :resizable true :filter "agNumberColumnFilter" :type "numericColumn" :floatingFilter true}]]
+        [:> ag-grid/AgGridColumn {:field "abundance_4_name"
+                                  :maxWidth 140
+                                  :headerName "Species Name"
+                                  :sortable true
+                                  :resizable true
+                                  :filter "agTextColumnFilter"
+                                  :floatingFilter true}]
+        [:> ag-grid/AgGridColumn {:field "abundance_4_fraction_total_reads"
+                                  :maxWidth 120
+                                  :headerName "Abundance (%)"
+                                  :sortable true
+                                  :resizable true
+                                  :filter "agNumberColumnFilter"
+                                  :type "numericColumn"
+                                  :floatingFilter true}]]
        [:> ag-grid/AgGridColumn {:headerName "5th Most Abundant Species"}
-        [:> ag-grid/AgGridColumn {:field "abundance_5_name" :maxWidth 140 :headerName "Species Name" :sortable true :resizable true :filter "agTextColumnFilter" :floatingFilter true}]
-        [:> ag-grid/AgGridColumn {:field "abundance_5_fraction_total_reads" :maxWidth 120 :headerName "Abundance (%)" :sortable true :resizable true :filter "agNumberColumnFilter" :type "numericColumn" :floatingFilter true}]]]] 
+        [:> ag-grid/AgGridColumn {:field "abundance_5_name"
+                                  :maxWidth 140
+                                  :headerName "Species Name"
+                                  :sortable true
+                                  :resizable true
+                                  :filter "agTextColumnFilter"
+                                  :floatingFilter true}]
+        [:> ag-grid/AgGridColumn {:field "abundance_5_fraction_total_reads"
+                                  :maxWidth 120
+                                  :headerName "Abundance (%)"
+                                  :sortable true
+                                  :resizable true
+                                  :filter "agNumberColumnFilter"
+                                  :type "numericColumn"
+                                  :floatingFilter true}]]]] 
      [:div {:style {:grid-row "2"}}
       [:button {:onClick #(.exportDataAsCsv (.-api (.-current grid-ref)) (clj->js {:fileName (str currently-selected-run-id "_species_abundance.csv")}))} "Export CSV"]]]))
 
