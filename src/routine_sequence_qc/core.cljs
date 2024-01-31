@@ -146,12 +146,20 @@
                                               nil
                                               (:value (first percent-q30-check)))]
                             (assoc run :run_percent_q30 percent-q30)))
+        add-fastq-data (fn [run]
+                          (let [checked-metrics (get-in run [:run_qc_check :checked_metrics])
+                                fastq-data-check (filter #(= (:metric %) "SumSampleFastqFileSizesMb") checked-metrics)
+                                fastq-data (if (empty? fastq-data-check)
+                                             nil
+                                             (:value (first fastq-data-check)))]
+                            (assoc run :run_fastq_data_mb fastq-data)))
         row-data (->> runs
                       (map add-multiqc-link)
                       (map add-qc-status)
                       (map add-error-rate)
                       (map add-percent-pf)
-                      (map add-percent-q30))]
+                      (map add-percent-q30)
+                      (map add-fastq-data))]
     [:div {:class "ag-theme-balham"
            :style {}}
      [:> ag-grid/AgGridReact
@@ -212,7 +220,16 @@
                                 :filter "agNumberColumnFilter"
                                 :sortable true
                                 :floatingFilter true
-                                :cellStyle (qc-metric-style "PercentGtQ30")}]]]))
+                                :cellStyle (qc-metric-style "PercentGtQ30")}]
+      [:> ag-grid/AgGridColumn {:field "run_fastq_data_mb"
+                                :headerName "Fastq Data (Mb)"
+                                :minWidth 96
+                                :maxWidth 150
+                                :resizable true
+                                :filter "agNumberColumnFilter"
+                                :sortable true
+                                :floatingFilter true
+                                :cellStyle (qc-metric-style "SumSampleFastqFileSizesMb")}]]]))
 
 
 (defn library-sequence-qc-table
