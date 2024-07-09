@@ -146,6 +146,13 @@
                                               nil
                                               (:value (first percent-q30-check)))]
                             (assoc run :run_percent_q30 percent-q30)))
+        add-percent-aligned (fn [run]
+                              (let [checked-metrics (get-in run [:run_qc_check :checked_metrics])
+                                    percent-aligned-check (filter #(= (:metric %) "PercentAligned") checked-metrics)
+                                    percent-aligned (if (empty? percent-aligned-check)
+                                                      nil
+                                                      (:value (first percent-aligned-check)))]
+                                (assoc run :run_percent_aligned percent-aligned)))
         add-fastq-data (fn [run]
                           (let [checked-metrics (get-in run [:run_qc_check :checked_metrics])
                                 fastq-data-check (filter #(= (:metric %) "SumSampleFastqFileSizesMb") checked-metrics)
@@ -159,6 +166,7 @@
                       (map add-error-rate)
                       (map add-percent-pf)
                       (map add-percent-q30)
+                      (map add-percent-aligned)
                       (map add-fastq-data))]
     [:div {:class "ag-theme-balham"
            :style {}}
@@ -221,6 +229,15 @@
                                 :sortable true
                                 :floatingFilter true
                                 :cellStyle (qc-metric-style "PercentGtQ30")}]
+      [:> ag-grid/AgGridColumn {:field "run_percent_aligned"
+                                :headerName "% Aligned"
+                                :minWidth 96
+                                :maxWidth 128
+                                :resizable true
+                                :filter "agNumberColumnFilter"
+                                :sortable true
+                                :floatingFilter true
+                                :cellStyle (qc-metric-style "PercentAligned")}]
       [:> ag-grid/AgGridColumn {:field "run_fastq_data_mb"
                                 :headerName "Fastq Data (Mb)"
                                 :minWidth 96
