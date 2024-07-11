@@ -14,7 +14,7 @@
 (defonce db (r/atom {}))
 
 
-(def app-version "v3.2.0")
+(def app-version "v3.3.0")
 
 (def palette {:green "#6ade8a"
               :yellow "#f5d76e"
