@@ -153,6 +153,13 @@
                                                       nil
                                                       (:value (first percent-aligned-check)))]
                                 (assoc run :run_percent_aligned percent-aligned)))
+        add-yield (fn [run]
+                    (let [checked-metrics (get-in run [:run_qc_check :checked_metrics])
+                          yield-check (filter #(= (:metric %) "YieldTotal") checked-metrics)
+                          yield (if (empty? yield-check)
+                                  nil
+                                  (:value (first yield-check)))]
+                      (assoc run :run_yield yield)))
         add-fastq-data (fn [run]
                           (let [checked-metrics (get-in run [:run_qc_check :checked_metrics])
                                 fastq-data-check (filter #(= (:metric %) "SumSampleFastqFileSizesMb") checked-metrics)
@@ -167,6 +174,7 @@
                       (map add-percent-pf)
                       (map add-percent-q30)
                       (map add-percent-aligned)
+                      (map add-yield)
                       (map add-fastq-data))]
     [:div {:class "ag-theme-balham"
            :style {}}
@@ -238,6 +246,15 @@
                                 :sortable true
                                 :floatingFilter true
                                 :cellStyle (qc-metric-style "PercentAligned")}]
+      [:> ag-grid/AgGridColumn {:field "run_yield"
+                                :headerName "Yield (Gigabases)"
+                                :minWidth 96
+                                :maxWidth 152
+                                :resizable true
+                                :filter "agNumberColumnFilter"
+                                :sortable true
+                                :floatingFilter true
+                                :cellStyle (qc-metric-style "YieldTotal")}]
       [:> ag-grid/AgGridColumn {:field "run_fastq_data_mb"
                                 :headerName "Fastq Data (Mb)"
                                 :minWidth 96
