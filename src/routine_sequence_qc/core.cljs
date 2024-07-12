@@ -108,8 +108,6 @@
         today-js-date (new js/Date)
         today-y-m-d [(.getFullYear today-js-date) (+ 1 (.getMonth today-js-date)) (.getDate today-js-date)]
         today-iso-str (str/join "-" today-y-m-d)
-        _ (js/console.log today-y-m-d)
-        _ (js/console.log today-iso-str)
         add-multiqc-link #(assoc % :multiqc_link (str "data/multiqc/" (:run_id %) "_multiqc.html"))
         qc-status-style (fn [params]
                           (let [cell-value (. params -value)]
