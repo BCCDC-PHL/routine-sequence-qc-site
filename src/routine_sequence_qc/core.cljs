@@ -1,6 +1,7 @@
 (ns routine-sequence-qc.core
   (:require-macros [cljs.core.async.macros :refer [go]])
-  (:require [clojure.set]
+  (:require [clojure.string :as str]
+            [clojure.set]
             [reagent.core :as r] 
             [reagent.dom :as rdom]
             [reagent.dom.server]
@@ -103,6 +104,10 @@
   "Component for displaying Illumina sequencing runs."
   []
   (let [runs (:runs @db)
+        grid-ref (clj->js {:current nil})
+        today-js-date (new js/Date)
+        today-y-m-d [(.getFullYear today-js-date) (+ 1 (.getMonth today-js-date)) (.getDate today-js-date)]
+        today-iso-str (str/join "-" today-y-m-d)
         add-multiqc-link #(assoc % :multiqc_link (str "data/multiqc/" (:run_id %) "_multiqc.html"))
         qc-status-style (fn [params]
                           (let [cell-value (. params -value)]
@@ -176,94 +181,100 @@
                       (map add-percent-aligned)
                       (map add-yield)
                       (map add-fastq-data))]
-    [:div {:class "ag-theme-balham"
-           :style {}}
-     [:> ag-grid/AgGridReact
-      {:rowData row-data
-       :pagination false
-       :rowSelection "single"
-       :enableCellTextSelection true
-       :onFirstDataRendered #(-> % .-api .sizeColumnsToFit)
-       :onSelectionChanged run-selected}
-      [:> ag-grid/AgGridColumn {:field "run_id"
-                                :headerName "Run ID"
-                                :minWidth 200
-                                :resizable true
-                                :filter "agTextColumnFilter"
-                                :sortable true
-                                :checkboxSelection true
-                                :sort "desc"
-                                :floatingFilter true}]
-      [:> ag-grid/AgGridColumn {:field "run_qc_check_status"
-                                :headerName "QC"
-                                :minWidth 72
-                                :maxWidth 172
-                                :resizable true
-                                :filter "agTextColumnFilter"
-                                :sortable true
-                                :floatingFilter true
-                                :cellStyle qc-status-style}]
-      [:> ag-grid/AgGridColumn {:field "multiqc_link"
-                                :headerName "MultiQC"
-                                :minWidth 96
-                                :maxWidth 128
-                                :resizable true
-                                :cellRenderer cell-renderer-hyperlink-multiqc
-                                :floatingFilter true}]
-      [:> ag-grid/AgGridColumn {:field "run_error_rate"
-                                :headerName "Error Rate"
-                                :minWidth 96
-                                :maxWidth 128
-                                :resizable true
-                                :filter "agNumberColumnFilter"
-                                :sortable true
-                                :floatingFilter true
-                                :cellStyle (qc-metric-style "ErrorRate")}]
-      [:> ag-grid/AgGridColumn {:field "run_percent_pf"
-                                :headerName "% Pass Filter"
-                                :minWidth 110
-                                :maxWidth 128
-                                :resizable true
-                                :filter "agNumberColumnFilter"
-                                :sortable true
-                                :floatingFilter true
-                                :cellStyle (qc-metric-style "PercentPf")}]
-      [:> ag-grid/AgGridColumn {:field "run_percent_q30"
-                                :headerName "% Q30"
-                                :minWidth 96
-                                :maxWidth 128
-                                :resizable true
-                                :filter "agNumberColumnFilter"
-                                :sortable true
-                                :floatingFilter true
-                                :cellStyle (qc-metric-style "PercentGtQ30")}]
-      [:> ag-grid/AgGridColumn {:field "run_percent_aligned"
+    [:div {:style {:display "grid"
+                   :grid-template-columns "1fr"
+                   :grid-template-rows "23fr 1fr"}}
+     [:div {:class "ag-theme-balham"
+            :style {}}
+      [:> ag-grid/AgGridReact
+       {:ref grid-ref
+        :rowData row-data
+        :pagination false
+        :rowSelection "single"
+        :enableCellTextSelection true
+        :onFirstDataRendered #(-> % .-api .sizeColumnsToFit)
+        :onSelectionChanged run-selected}
+       [:> ag-grid/AgGridColumn {:field "run_id"
+                                 :headerName "Run ID"
+                                 :minWidth 200
+                                 :resizable true
+                                 :filter "agTextColumnFilter"
+                                 :sortable true
+                                 :checkboxSelection true
+                                 :sort "desc"
+                                 :floatingFilter true}]
+       [:> ag-grid/AgGridColumn {:field "run_qc_check_status"
+                                 :headerName "QC"
+                                 :minWidth 72
+                                 :maxWidth 172
+                                 :resizable true
+                                 :filter "agTextColumnFilter"
+                                 :sortable true
+                                 :floatingFilter true
+                                 :cellStyle qc-status-style}]
+       [:> ag-grid/AgGridColumn {:field "multiqc_link"
+                                 :headerName "MultiQC"
+                                 :minWidth 96
+                                 :maxWidth 128
+                                 :resizable true
+                                 :cellRenderer cell-renderer-hyperlink-multiqc
+                                 :floatingFilter true}]
+       [:> ag-grid/AgGridColumn {:field "run_error_rate"
+                                 :headerName "Error Rate"
+                                 :minWidth 96
+                                 :maxWidth 128
+                                 :resizable true
+                                 :filter "agNumberColumnFilter"
+                                 :sortable true
+                                 :floatingFilter true
+                                 :cellStyle (qc-metric-style "ErrorRate")}]
+       [:> ag-grid/AgGridColumn {:field "run_percent_pf"
+                                 :headerName "% Pass Filter"
+                                 :minWidth 110
+                                 :maxWidth 128
+                                 :resizable true
+                                 :filter "agNumberColumnFilter"
+                                 :sortable true
+                                 :floatingFilter true
+                                 :cellStyle (qc-metric-style "PercentPf")}]
+       [:> ag-grid/AgGridColumn {:field "run_percent_q30"
+                                 :headerName "% Q30"
+                                 :minWidth 96
+                                 :maxWidth 128
+                                 :resizable true
+                                 :filter "agNumberColumnFilter"
+                                 :sortable true
+                                 :floatingFilter true
+                                 :cellStyle (qc-metric-style "PercentGtQ30")}]
+       [:> ag-grid/AgGridColumn {:field "run_percent_aligned"
                                 :headerName "% Aligned"
-                                :minWidth 96
-                                :maxWidth 128
-                                :resizable true
-                                :filter "agNumberColumnFilter"
-                                :sortable true
-                                :floatingFilter true
-                                :cellStyle (qc-metric-style "PercentAligned")}]
-      [:> ag-grid/AgGridColumn {:field "run_yield"
-                                :headerName "Yield (Gigabases)"
-                                :minWidth 96
-                                :maxWidth 152
-                                :resizable true
-                                :filter "agNumberColumnFilter"
-                                :sortable true
-                                :floatingFilter true
-                                :cellStyle (qc-metric-style "YieldTotal")}]
-      [:> ag-grid/AgGridColumn {:field "run_fastq_data_mb"
-                                :headerName "Fastq Data (Mb)"
-                                :minWidth 96
-                                :maxWidth 150
-                                :resizable true
-                                :filter "agNumberColumnFilter"
-                                :sortable true
-                                :floatingFilter true
-                                :cellStyle (qc-metric-style "SumSampleFastqFileSizesMb")}]]]))
+                                 :minWidth 96
+                                 :maxWidth 128
+                                 :resizable true
+                                 :filter "agNumberColumnFilter"
+                                 :sortable true
+                                 :floatingFilter true
+                                 :cellStyle (qc-metric-style "PercentAligned")}]
+       [:> ag-grid/AgGridColumn {:field "run_yield"
+                                 :headerName "Yield (Gigabases)"
+                                 :minWidth 96
+                                 :maxWidth 152
+                                 :resizable true
+                                 :filter "agNumberColumnFilter"
+                                 :sortable true
+                                 :floatingFilter true
+                                 :cellStyle (qc-metric-style "YieldTotal")}]
+       [:> ag-grid/AgGridColumn {:field "run_fastq_data_mb"
+                                 :headerName "Fastq Data (Mb)"
+                                 :minWidth 96
+                                 :maxWidth 150
+                                 :resizable true
+                                 :filter "agNumberColumnFilter"
+                                 :sortable true
+                                 :floatingFilter true
+                                 :cellStyle (qc-metric-style "SumSampleFastqFileSizesMb")}]]
+      [:div {:style {:grid-row "2"}}
+       [:button {:onClick #(.exportDataAsCsv (.-api (.-current grid-ref)) (clj->js {:fileName (str today-iso-str "_illumina_sequencing_runs_routine_qc.csv")}))} "Export CSV"]]]]))
 
 
 (defn library-sequence-qc-table
