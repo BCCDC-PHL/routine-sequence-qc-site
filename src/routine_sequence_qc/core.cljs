@@ -192,6 +192,9 @@
         :pagination false
         :rowSelection "single"
         :enableCellTextSelection true
+        :tooltipShowMode "whenTruncated"
+        :tooltipShowDelay 25
+        :tooltipHideDelay 50
         :onFirstDataRendered #(-> % .-api .sizeColumnsToFit)
         :onSelectionChanged run-selected}
        [:> ag-grid/AgGridColumn {:field "run_id"
@@ -227,7 +230,8 @@
                                  :filter "agNumberColumnFilter"
                                  :sortable true
                                  :floatingFilter true
-                                 :cellStyle (qc-metric-style "ErrorRate")}]
+                                 :cellStyle (qc-metric-style "ErrorRate")
+                                 :headerTooltip "Error Rate"}]
        [:> ag-grid/AgGridColumn {:field "run_percent_pf"
                                  :headerName "% Pass Filter"
                                  :minWidth 110
@@ -236,7 +240,8 @@
                                  :filter "agNumberColumnFilter"
                                  :sortable true
                                  :floatingFilter true
-                                 :cellStyle (qc-metric-style "PercentPf")}]
+                                 :cellStyle (qc-metric-style "PercentPf")
+                                 :headerTooltip "% Pass Filter"}]
        [:> ag-grid/AgGridColumn {:field "run_percent_q30"
                                  :headerName "% Q30"
                                  :minWidth 96
@@ -247,9 +252,9 @@
                                  :floatingFilter true
                                  :cellStyle (qc-metric-style "PercentGtQ30")}]
        [:> ag-grid/AgGridColumn {:field "run_percent_aligned"
-                                :headerName "% Aligned"
-                                 :minWidth 96
-                                 :maxWidth 128
+                                :headerName "% PhiX Aligned"
+                                 :minWidth 128
+                                 :maxWidth 256
                                  :resizable true
                                  :filter "agNumberColumnFilter"
                                  :sortable true
@@ -257,8 +262,8 @@
                                  :cellStyle (qc-metric-style "PercentAligned")}]
        [:> ag-grid/AgGridColumn {:field "run_yield"
                                  :headerName "Yield (Gigabases)"
-                                 :minWidth 96
-                                 :maxWidth 152
+                                 :minWidth 150
+                                 :maxWidth 256
                                  :resizable true
                                  :filter "agNumberColumnFilter"
                                  :sortable true
@@ -266,7 +271,7 @@
                                  :cellStyle (qc-metric-style "YieldTotal")}]
        [:> ag-grid/AgGridColumn {:field "run_fastq_data_mb"
                                  :headerName "Fastq Data (Mb)"
-                                 :minWidth 96
+                                 :minWidth 128
                                  :maxWidth 150
                                  :resizable true
                                  :filter "agNumberColumnFilter"
