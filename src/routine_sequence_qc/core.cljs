@@ -261,7 +261,7 @@
                                  :floatingFilter true
                                  :cellStyle (qc-metric-style "PercentPf")
                                  :headerTooltip (str "Percentage of Clusters Passed Filter\n"
-                                                     "Low-quality clusters are filtered and do not generate reads\n"
+                                                     "Low-quality clusters are filtered out and do not generate reads\n"
                                                      "Current Threshold: " (get-applied-qc-threshold latest-run "PercentPf") "%")
                                  :tooltipValueGetter #(str "Applied Threshold: "
                                                            (get-applied-qc-threshold (get-cell-data %) "PercentPf") "%")}]
@@ -295,7 +295,7 @@
                                                            (get-applied-qc-threshold (get-cell-data %) "PercentAligned") "%")}]
        [:> ag-grid/AgGridColumn {:field "run_yield"
                                  :headerName "Yield (GBases)"
-                                 :minWidth 150
+                                 :minWidth 128
                                  :maxWidth 256
                                  :resizable true
                                  :filter "agNumberColumnFilter"
