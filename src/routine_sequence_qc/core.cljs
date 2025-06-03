@@ -15,7 +15,7 @@
 (defonce db (r/atom {}))
 
 
-(def app-version "v3.3.0")
+(def app-version "v3.4.0")
 
 (def palette {:green "#6ade8a"
               :yellow "#f5d76e"
@@ -72,6 +72,11 @@
            .-api
            .getSelectedNodes)))
 
+(defn get-cell-data
+  "Take a JS cell object and convert to clj data"
+  [row]
+  (js->clj (.-data row) :keywordize-keys true))
+
 
 (defn run-selected
   "Function to run when a row is selected in the runs table."
@@ -99,11 +104,20 @@
 (defn cell-renderer-hyperlink-bracken [params]
   (cell-renderer-hyperlink-button "Abundances" params))
 
+(defn get-applied-qc-threshold
+  "Given a run with structure: {:run_qc_check {:checked_metrics [{:metric \"metric1\"}]}},
+  and a name of a metric, return the threshold that was applied for QC of that metric."
+  [run metric-name]
+  (let [checked-metrics (get-in run [:run_qc_check :checked_metrics])
+        metric-of-interest (first (filter #(= (:metric %) metric-name) checked-metrics))]
+    (get metric-of-interest :threshold "Unknown")))
+
 
 (defn illumina-runs-table
   "Component for displaying Illumina sequencing runs."
   []
   (let [runs (:runs @db)
+        latest-run (last (sort-by :run_id runs))
         grid-ref (clj->js {:current nil})
         today-js-date (new js/Date)
         today-y-m-d [(.getFullYear today-js-date) (+ 1 (.getMonth today-js-date)) (.getDate today-js-date)]
@@ -192,9 +206,9 @@
         :pagination false
         :rowSelection "single"
         :enableCellTextSelection true
-        :tooltipShowMode "whenTruncated"
-        :tooltipShowDelay 25
+        :tooltipShowDelay 10
         :tooltipHideDelay 50
+        :enableBrowserTooltips true
         :onFirstDataRendered #(-> % .-api .sizeColumnsToFit)
         :onSelectionChanged run-selected}
        [:> ag-grid/AgGridColumn {:field "run_id"
@@ -231,7 +245,10 @@
                                  :sortable true
                                  :floatingFilter true
                                  :cellStyle (qc-metric-style "ErrorRate")
-                                 :headerTooltip "Error Rate"}]
+                                 :headerTooltip (str "Sequencing Error Rate.\n"
+                                                     "Current Threshold: " (get-applied-qc-threshold latest-run "ErrorRate"))
+                                 :tooltipValueGetter #(str "Applied Threshold: "
+                                                           (get-applied-qc-threshold (get-cell-data %) "ErrorRate") "%")}]
        [:> ag-grid/AgGridColumn {:field "run_percent_pf"
                                  :headerName "% Pass Filter"
                                  :minWidth 110
@@ -241,7 +258,10 @@
                                  :sortable true
                                  :floatingFilter true
                                  :cellStyle (qc-metric-style "PercentPf")
-                                 :headerTooltip "% Pass Filter"}]
+                                 :headerTooltip (str "Percentage of Clusters Passed Filter.\n"
+                                                     "Current Threshold: " (get-applied-qc-threshold latest-run "PercentPf") "%")
+                                 :tooltipValueGetter #(str "Applied Threshold: "
+                                                           (get-applied-qc-threshold (get-cell-data %) "PercentPf"))}]
        [:> ag-grid/AgGridColumn {:field "run_percent_q30"
                                  :headerName "% Q30"
                                  :minWidth 96
@@ -250,7 +270,11 @@
                                  :filter "agNumberColumnFilter"
                                  :sortable true
                                  :floatingFilter true
-                                 :cellStyle (qc-metric-style "PercentGtQ30")}]
+                                 :cellStyle (qc-metric-style "PercentGtQ30")
+                                 :headerTooltip (str "Percentage of bases with Quality Score over 30.\n"
+                                                     "Current Threshold: " (get-applied-qc-threshold latest-run "PercentGtQ30"))
+                                 :tooltipValueGetter #(str "Applied Threshold: "
+                                                           (get-applied-qc-threshold (get-cell-data %) "PercentGtQ30"))}]
        [:> ag-grid/AgGridColumn {:field "run_percent_aligned"
                                 :headerName "% PhiX Aligned"
                                  :minWidth 128
@@ -259,7 +283,11 @@
                                  :filter "agNumberColumnFilter"
                                  :sortable true
                                  :floatingFilter true
-                                 :cellStyle (qc-metric-style "PercentAligned")}]
+                                 :cellStyle (qc-metric-style "PercentAligned")
+                                 :headerTooltip (str "Percentage of reads aligned to PhiX (internal control).\n"
+                                                     "Current Threshold: " (get-applied-qc-threshold latest-run "PercentAligned"))
+                                 :tooltipValueGetter #(str "Applied Threshold: "
+                                                           (get-applied-qc-threshold (get-cell-data %) "PercentGtQ30"))}]
        [:> ag-grid/AgGridColumn {:field "run_yield"
                                  :headerName "Yield (Gigabases)"
                                  :minWidth 150
