@@ -29,9 +29,12 @@ jobs:
         with:
           cli: latest
 
-      - name: Install Dependencies
-        run:
+      - name: Install Node Dependencies
+        run: |
           npm install
+
+      - name: Install Clojure Dependencies
+        run: |
           clojure -P
 
       - name: Run tests
