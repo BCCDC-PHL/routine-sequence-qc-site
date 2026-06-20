@@ -608,3 +608,32 @@
        ]]
      [:div {:style {:grid-row "2"}}
       [:button {:onClick #(export-library-species-abundance-table grid-ref currently-selected-run-id)} "Export CSV"]]]))
+
+
+(defn illumina
+  "Component for displaying all illumina sequencing run QC data."
+  []
+  [:div {:style {:display "grid"
+                 :grid-template-columns "3fr 13fr"
+                 :grid-template-rows "repeat(2, 1fr)"
+                 :gap "4px"
+                 :height "800px"}}
+   [:div {:style {:display "grid"
+                  :grid-column "1"
+                  :grid-row "1 / 3"
+                  :overflow "auto"
+                  :resize "horizontal"}}
+    [illumina-runs-table]]
+   [:div {:style {:display "grid"
+                  :grid-column "2"
+                  :grid-row "1"
+                  :gap "4px"
+                  :overflow "auto"
+                  :resize "horizontal"}}
+    [library-sequence-qc-table]]
+   [:div {:style {:display "grid"
+                  :grid-column "2"
+                  :grid-row "2"
+                  :overflow "auto"
+                  :resize "horizontal"}}
+    [library-species-abundance-table]]])

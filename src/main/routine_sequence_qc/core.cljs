@@ -1,50 +1,12 @@
 (ns routine-sequence-qc.core
   (:require-macros [cljs.core.async.macros :refer [go]])
-  (:require [clojure.string :as str]
-            [clojure.set]
-            [reagent.core :as r] 
+  (:require [clojure.set]
             [reagent.dom.client :as rdomc]
-            [reagent.dom.server]
-            [cljs-http.client :as http]
-            [cljs.core.async :refer [<!]]
             [ag-grid-community :refer [ModuleRegistry AllCommunityModule]]
-            [ag-grid-react :as ag-grid]
-            [cljs.pprint :refer [pprint]]
-            [routine-sequence-qc.state :as state :refer [db]]
             [routine-sequence-qc.loaders :as loaders]
-            [routine-sequence-qc.components :as components]
-            [routine-sequence-qc.grid :as grid]))
+            [routine-sequence-qc.components :as components]))
 
 (def app-version "v3.4.1")
-
-(defn illumina
-  "Component for displaying all illumina sequencing run QC data."
-  []
-  [:div {:style {:display "grid"
-                 :grid-template-columns "3fr 13fr"
-                 :grid-template-rows "repeat(2, 1fr)"
-                 :gap "4px"
-                 :height "800px"}}
-   [:div {:style {:display "grid"
-                  :grid-column "1"
-                  :grid-row "1 / 3"
-                  :overflow "auto"
-                  :resize "horizontal"}}
-    [components/illumina-runs-table]]
-   [:div {:style {:display "grid"
-                  :grid-column "2"
-                  :grid-row "1"
-                  :gap "4px"
-                  :overflow "auto"
-                  :resize "horizontal"}}
-    [components/library-sequence-qc-table]]
-   [:div {:style {:display "grid"
-                  :grid-column "2"
-                  :grid-row "2"
-                  :overflow "auto"
-                  :resize "horizontal"}}
-    [components/library-species-abundance-table]]])
-
 
 (defn app
   "Root app component."
@@ -54,7 +16,7 @@
                  :grid-gap "4px 4px"
                  :height "100%"}}
    [components/header app-version]
-   [illumina]])
+   [components/illumina]])
 
 (defonce root
   (rdomc/create-root (.getElementById js/document "app")))
