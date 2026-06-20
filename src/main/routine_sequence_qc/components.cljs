@@ -102,6 +102,11 @@
             (clj->js {:backgroundColor (:red palette)})
             :else (clj->js {})))))
 
+(defn add-run-date
+  [{:keys [run_id] :as run}]
+  (let [date (run-id->date run_id)]
+    (assoc run :run_date date)))
+
 (defn add-qc-status
   [run]
   (let [qc-status (get-in run [:run_qc_check :overall_qc_pass_fail])]
@@ -179,8 +184,11 @@
     :resizable true
     :filter "agTextColumnFilter"
     :sortable true
-    :sort "desc"
     :floatingFilter true}
+   {:field "run_date"
+    :headerName "Run Date"
+    :hide true
+    :sort "desc"}
    {:field "run_qc_check_status"
     :headerName "QC Status"
     :minWidth 128
@@ -289,12 +297,12 @@
   "Component for displaying Illumina sequencing runs."
   []
   (let [runs (:runs @db)
-        latest-run (last (sort-by :run_id runs))
         grid-ref (clj->js {:current nil})
         today-js-date (new js/Date)
         today-y-m-d [(.getFullYear today-js-date) (+ 1 (.getMonth today-js-date)) (.getDate today-js-date)]
         today-iso-str (str/join "-" today-y-m-d)
         row-data (->> runs
+                      (map add-run-date)
                       (map add-multiqc-link)
                       (map add-qc-status)
                       (map add-error-rate)
@@ -302,7 +310,8 @@
                       (map add-percent-q30)
                       (map add-percent-aligned)
                       (map add-yield)
-                      (map add-fastq-data))]
+                      (map add-fastq-data))
+        latest-run (last (sort-by :run_date row-data))]
     [:div {:style {:display "grid"
                    :grid-template-columns "1fr"
                    :grid-template-rows "23fr 1fr"}}
