@@ -50,6 +50,19 @@
 
 ;; Sequencing Runs Table Helper Fns
 
+(defn run-id->date
+  "Extract the date from a run ID as an ISO-8601 string YYYY-MM-DD"
+  [run-id]
+  (let [date-part (first (str/split run-id "_"))
+        normalized-date (cond (= 6 (count date-part))
+                              (str "20" (subs date-part 0 6))
+                              (= 8 (count date-part))
+                              (subs date-part 0 8))
+        year (subs normalized-date 0 4)
+        month (subs normalized-date 4 6)
+        day (subs normalized-date 6 8)]
+    (str/join "-" [year month day])))
+
 (defn get-applied-qc-threshold
   "Given a run with structure: {:run_qc_check {:checked_metrics [{:metric \"metric1\"}]}},
   and a name of a metric, return the threshold that was applied for QC of that metric."
@@ -575,6 +588,9 @@
        {:ref grid-ref
         :columnDefs library-species-abundance-column-defs
         :rowData row-data
+        :getRowId (fn [params]
+                    (let [^js data (.-data params)]
+                      (.-library_id data)))
         :theme "legacy"
         :pagination false
         :enableCellTextSelection true

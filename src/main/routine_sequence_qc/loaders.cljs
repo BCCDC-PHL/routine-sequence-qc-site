@@ -10,11 +10,13 @@
   (go
     (let [response (<! (http/get  "data/runs.json"))
           status (:status response)]
-      (cond
-        (= status 200)
-        (let [response-body (:body response)
-              runs response-body]
-          (swap! db assoc-in [:runs] runs))))))
+      (case status
+        200 (let [response-body (:body response)
+                  runs response-body]
+              (swap! db assoc :runs runs))
+        404 (js/console.log "Run data not found.")
+        500 (js/console.log "Failed to download run data.")
+        :else nil))))
 
 
 (defn load-library-qc

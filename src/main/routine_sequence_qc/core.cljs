@@ -15,34 +15,7 @@
             [routine-sequence-qc.components :as components]
             [routine-sequence-qc.grid :as grid]))
 
-
 (def app-version "v3.4.1")
-
-
-(defn run-id->date
-  "Extract the date from a run ID as an ISO-8601 string YYYY-MM-DD"
-  [run-id]
-  (let [date-part (str/split run-id "_" 1)]
-    (cond (= 6 (count date-part))
-          date-part
-          (= 6 (count date-part))
-          date-part)
-    )
-  )
-
-(comment
-  (run-id->date "260617_VH00278_407_AAJCFF3M5")
-  (run-id->date "20260612_SH01373_0001_ASC2219288")
-  )
-
-
-
-
-
-
-
-
-
 
 (defn illumina
   "Component for displaying all illumina sequencing run QC data."
