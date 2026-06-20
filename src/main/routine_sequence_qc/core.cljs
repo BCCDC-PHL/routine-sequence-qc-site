@@ -1,5 +1,4 @@
 (ns routine-sequence-qc.core
-  (:require-macros [cljs.core.async.macros :refer [go]])
   (:require [clojure.set]
             [reagent.dom.client :as rdomc]
             [ag-grid-community :refer [ModuleRegistry AllCommunityModule]]
@@ -18,13 +17,12 @@
    [components/header app-version]
    [components/illumina]])
 
-(defonce root
-  (rdomc/create-root (.getElementById js/document "app")))
+(defonce root (atom nil))
 
 (defn render
   "Render the app into the root app div."
   []
-  (rdomc/render root [app]))
+  (rdomc/render @root [app]))
 
 (defn ^:dev/after-load re-render
   "Hot-reload hook called by shadow-cljs after code changes.
@@ -38,4 +36,6 @@
   []
   (.registerModules ModuleRegistry #js [AllCommunityModule])
   (loaders/load-sequencing-runs)
+  (when-let [el (.getElementById js/document "app")]
+    (reset! root (rdomc/create-root el)))
   (render))
