@@ -57,7 +57,7 @@
                   :grid-row "1 / 3"
                   :overflow "auto"
                   :resize "horizontal"}}
-    [components/illumina-runs-table db]]
+    [components/illumina-runs-table]]
    [:div {:style {:display "grid"
                   :grid-column "2"
                   :grid-row "1"
@@ -81,7 +81,7 @@
                  :grid-gap "4px 4px"
                  :height "100%"}}
    [components/header app-version]
-   #_[illumina]])
+   [illumina]])
 
 (defonce root
   (rdomc/create-root (.getElementById js/document "app")))

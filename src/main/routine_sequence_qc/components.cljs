@@ -1,12 +1,13 @@
 (ns routine-sequence-qc.components
   (:require [clojure.string :as str]
+            [reagent.core :as r]
             [routine-sequence-qc.state :refer [db]]
             [routine-sequence-qc.loaders :as loaders]
             [routine-sequence-qc.grid :as grid]
             [routine-sequence-qc.color :refer [palette]]))
 
 
-;; Header
+;; Header Component
 
 (defn header
   "Component for displaying the header."
@@ -18,13 +19,19 @@
    [:div {:style {:display "grid"
                   :grid-template-columns "repeat(2, 1fr)"
                   :align-items "center"}}
-    [:h1 {:style {:font-family "Arial" :color "#004a87" :margin "0px"}} "Routine Sequence QC"] [:p {:style {:font-family "Arial" :color "grey" :justify-self "start"}} app-version]]
+    [:h1 {:style {:font-family "Arial" :color (:bccdc-blue palette) :margin "0px"}} "Routine Sequence QC"] [:p {:style {:font-family "Arial" :color "grey" :justify-self "start"}} app-version]]
    [:div {:style {:display "grid" :align-self "center" :justify-self "end"}}
-    [:img {:src (str "images/logo.svg") :height "48px"}]]])
+    [:img {:src "images/logo.svg" :height "48px"}]]])
 
+;; Cell Renderers
 
 (defn cell-renderer-hyperlink-button [text params]
-  (str "<button><a href=\"" (.-value params) "\" style=\"color: inherit; text-decoration: inherit\" target=\"_blank\">" text "</a></button>"))
+  (r/as-element
+   [:button
+    [:a {:href (str (.-value params))
+         :style {:color "inherit"}
+         :text-decoration "inherit"
+         :target "_blank"} text]]))
 
 (defn cell-renderer-hyperlink-multiqc [params]
   (cell-renderer-hyperlink-button "MultiQC" params))
@@ -145,6 +152,10 @@
   (let [run-id (:run_id run)]
     (assoc run :multiqc_link (str "data/multiqc/" run-id "_multiqc.html"))))
 
+(defn export-illumina-runs-table
+  [grid-ref today-iso-str]
+  (.exportDataAsCsv (.-api (.-current grid-ref)) (clj->js {:fileName (str today-iso-str "_illumina_sequencing_runs_routine_qc.csv")})))
+
 ;; Sequencing Runs Table Column Defs
 
 (defn illumina-runs-table-column-defs
@@ -155,7 +166,6 @@
     :resizable true
     :filter "agTextColumnFilter"
     :sortable true
-    :checkboxSelection true
     :sort "desc"
     :floatingFilter true}
    {:field "run_qc_check_status"
@@ -167,7 +177,7 @@
     :sortable true
     :floatingFilter true
     :cellStyle qc-status-style
-    :headerTooltip (str "Overall Run QC Status")}
+    :headerTooltip "Overall Run QC Status"}
    {:field "multiqc_link"
     :headerName "MultiQC"
     :minWidth 96
@@ -258,12 +268,13 @@
                         "The sum of sequence data across all samples.\n"
                         "Current Threshold: " (get-applied-qc-threshold latest-run "SumSampleFastqFileSizesMb") " MB")
     :tooltipValueGetter #(str "Applied Threshold: "
-                              (get-applied-qc-threshold (grid/get-cell-data %) "SumSampleFastqFileSizesMb") " MB")}]
-  )
+                              (get-applied-qc-threshold (grid/get-cell-data %) "SumSampleFastqFileSizesMb") " MB")}])
+
+;; Sequencing Runs Table Component
 
 (defn illumina-runs-table
   "Component for displaying Illumina sequencing runs."
-  [db]
+  []
   (let [runs (:runs @db)
         latest-run (last (sort-by :run_id runs))
         grid-ref (clj->js {:current nil})
@@ -288,8 +299,12 @@
        {:ref grid-ref
         :columnDefs (illumina-runs-table-column-defs latest-run)
         :rowData row-data
+        :getRowId (fn [params]
+                    (let [^js data (.-data params)]
+                      (.-run_id data)))
+        :theme "legacy"
         :pagination false
-        :rowSelection "single"
+        :rowSelection {:mode "singleRow" :checkboxes true}
         :enableCellTextSelection true
         :tooltipShowDelay 10
         :tooltipHideDelay 50
@@ -298,8 +313,19 @@
         :onSelectionChanged run-selected}
        ]]
       [:div {:style {:grid-row "2"}}
-       [:button {:onClick #(.exportDataAsCsv (.-api (.-current grid-ref)) (clj->js {:fileName (str today-iso-str "_illumina_sequencing_runs_routine_qc.csv")}))} "Export CSV"]]]))
+       [:button {:onClick #(export-illumina-runs-table grid-ref today-iso-str)} "Export CSV"]]]))
 
+;;
+;; Library QC Table
+;;
+
+;; Library QC Table Helpers
+
+(defn export-sequence-qc-table
+  [grid-ref run-id]
+  (.exportDataAsCsv (.-api (.-current grid-ref)) (clj->js {:fileName (str run-id "_library_qc.csv")})))
+
+;; Library QC Table Column Definitions
 
 (def library-sequence-qc-column-defs
   [{:field "library_id"
@@ -309,8 +335,6 @@
     :resizable true
     :filter "agTextColumnFilter"
     :pinned "left"
-    :checkboxSelection false
-    :headerCheckboxSelectionFilteredOnly true
     :floatingFilter true}
    {:field "project_id"
     :headerName "Project ID"
@@ -375,6 +399,8 @@
     :maxWidth 96
     :cellRenderer cell-renderer-hyperlink-fastqc-r2}])
 
+;; Library QC Table Component
+
 (defn library-sequence-qc-table
   "Component for displaying library sequence QC data."
   []
@@ -399,126 +425,137 @@
        {:ref grid-ref
         :column-defs library-sequence-qc-column-defs
         :rowData row-data
+        :getRowId (fn [params]
+                    (let [^js data (.-data params)]
+                      (.-library_id data)))
         :theme "legacy"
         :pagination false
         :enableCellTextSelection true
         :onFirstDataRendered #(-> % .-api .sizeColumnsToFit)
-        :onSelectionChanged #()}
-       ]]
+        :onSelectionChanged #()}]]
      [:div {:style {:grid-row "2"}}
-      [:button {:onClick #(.exportDataAsCsv (.-api (.-current grid-ref)) (clj->js {:fileName (str currently-selected-run-id "_library_qc.csv")}))} "Export CSV"]]]))
+      [:button {:onClick #(export-sequence-qc-table grid-ref currently-selected-run-id)} "Export CSV"]]]))
 
+;; Species Abundance Table Helpers
+
+(defn add-bracken-link 
+  [{:keys [run_id library_id ] :as row}]
+  (assoc row :bracken_link (str "data/bracken-species-abundances/" run_id "/" library_id "_bracken_species_abundances.tsv")))
+
+(defn export-library-species-abundance-table
+  [grid-ref run-id]
+  (.exportDataAsCsv (.-api (.-current grid-ref)) (clj->js {:fileName (str run-id "_species_abundance.csv")})))
+
+;; Species Abundance Table Column Definitions
 
 (def library-species-abundance-column-defs
-  [
-  {:field "library_id"
-   :headerName "Library ID"
-   :maxWidth 200
-   :sortable true
-   :resizable true
-   :filter "agTextColumnFilter"
-   :pinned "left"
-   :checkboxSelection false
-   :headerCheckboxSelectionFilteredOnly true
-   :floatingFilter true}
-  {:field "bracken_link"
-   :headerName "Abundances"
-   :maxWidth 128
-   :cellRenderer cell-renderer-hyperlink-bracken
-   :floatingFilter false}
-  {:field "project_id"
-   :headerName "Project ID"
-   :maxWidth 200
-   :sortable true
-   :resizable true
-   :filter "agTextColumnFilter"
-   :floatingFilter true}
-  {:headerName "Most Abundant Species"}
-  #_[{:field "abundance_1_name"
-      :maxWidth 140
-      :headerName "Species Name"
-      :sortable true
-      :resizable true
-      :filter "agTextColumnFilter"
-      :floatingFilter true}
-     {:field "abundance_1_fraction_total_reads"
-      :maxWidth 120
-      :headerName "Abundance"
-      :sortable true
-      :resizable true
-      :filter "agNumberColumnFilter"
-      :type "numericColumn"
-      :floatingFilter true}]
-  {:headerName "2nd Most Abundant Species"}
-  #_[{:field "abundance_2_name"
-      :maxWidth 140
-      :headerName "Species Name"
-      :sortable true
-      :resizable true
-      :filter "agTextColumnFilter"
-      :floatingFilter true}
-     {:field "abundance_2_fraction_total_reads"
-      :maxWidth 120
-      :headerName "Abundance (%)"
-      :sortable true
-      :resizable true
-      :filter "agNumberColumnFilter"
-      :type "numericColumn"
-      :floatingFilter true}]
-   {:headerName "3rd Most Abundant Species"}
-   #_[{:field "abundance_3_name"
-       :maxWidth 140
-       :headerName "Species Name"
-       :sortable true
-       :resizable true
-       :filter "agTextColumnFilter"
-       :floatingFilter true}
-      {:field "abundance_3_fraction_total_reads"
-       :maxWidth 120
-       :headerName "Abundance (%)"
-       :sortable true
-       :resizable true
-       :filter "agNumberColumnFilter"
-       :type "numericColumn"
-       :floatingFilter true}]
-   {:headerName "4th Most Abundant Species"}
-   #_[{:field "abundance_4_name"
-       :maxWidth 140
-       :headerName "Species Name"
-       :sortable true
-       :resizable true
-       :filter "agTextColumnFilter"
-       :floatingFilter true}
-      {:field "abundance_4_fraction_total_reads"
-       :maxWidth 120
-       :headerName "Abundance (%)"
-       :sortable true
-       :resizable true
-       :filter "agNumberColumnFilter"
-       :type "numericColumn"
-       :floatingFilter true}]
-  {:headerName "5th Most Abundant Species"}
-   #_[{:field "abundance_5_name"
-       :maxWidth 140
-       :headerName "Species Name"
-       :sortable true
-       :resizable true
-       :filter "agTextColumnFilter"
-       :floatingFilter true}
-      {:field "abundance_5_fraction_total_reads"
-       :maxWidth 120
-       :headerName "Abundance (%)"
-       :sortable true
-       :resizable true
-       :filter "agNumberColumnFilter"
-       :type "numericColumn"
-       :floatingFilter true}]])
+  [{:field "library_id"
+    :headerName "Library ID"
+    :maxWidth 200
+    :sortable true
+    :resizable true
+    :filter "agTextColumnFilter"
+    :pinned "left"
+    :floatingFilter true}
+   {:field "bracken_link"
+    :headerName "Abundances"
+    :maxWidth 128
+    :cellRenderer cell-renderer-hyperlink-bracken
+    :floatingFilter false}
+   {:field "project_id"
+    :headerName "Project ID"
+    :maxWidth 200
+    :sortable true
+    :resizable true
+    :filter "agTextColumnFilter"
+    :floatingFilter true}
+   {:headerName "Most Abundant Species"
+    :children [{:field "abundance_1_name"
+                :maxWidth 140
+                :headerName "Species Name"
+                :sortable true
+                :resizable true
+                :filter "agTextColumnFilter"
+                :floatingFilter true}
+               {:field "abundance_1_fraction_total_reads"
+                :maxWidth 120
+                :headerName "Abundance"
+                :sortable true
+                :resizable true
+                :filter "agNumberColumnFilter"
+                :type "numericColumn"
+                :floatingFilter true}]}
+   {:headerName "2nd Most Abundant Species"
+    :children [{:field "abundance_2_name"
+                :maxWidth 140
+                :headerName "Species Name"
+                :sortable true
+                :resizable true
+                :filter "agTextColumnFilter"
+                :floatingFilter true}
+               {:field "abundance_2_fraction_total_reads"
+                :maxWidth 120
+                :headerName "Abundance (%)"
+                :sortable true
+                :resizable true
+                :filter "agNumberColumnFilter"
+                :type "numericColumn"
+                :floatingFilter true}]}
+   {:headerName "3rd Most Abundant Species"
+    :children [{:field "abundance_3_name"
+                :maxWidth 140
+                :headerName "Species Name"
+                :sortable true
+                :resizable true
+                :filter "agTextColumnFilter"
+                :floatingFilter true}
+               {:field "abundance_3_fraction_total_reads"
+                :maxWidth 120
+                :headerName "Abundance (%)"
+                :sortable true
+                :resizable true
+                :filter "agNumberColumnFilter"
+                :type "numericColumn"
+                :floatingFilter true}]}
+   {:headerName "4th Most Abundant Species"
+    :children [{:field "abundance_4_name"
+                :maxWidth 140
+                :headerName "Species Name"
+                :sortable true
+                :resizable true
+                :filter "agTextColumnFilter"
+                :floatingFilter true}
+               {:field "abundance_4_fraction_total_reads"
+                :maxWidth 120
+                :headerName "Abundance (%)"
+                :sortable true
+                :resizable true
+                :filter "agNumberColumnFilter"
+                :type "numericColumn"
+                :floatingFilter true}]}
+   {:headerName "5th Most Abundant Species"
+    :children [{:field "abundance_5_name"
+                :maxWidth 140
+                :headerName "Species Name"
+                :sortable true
+                :resizable true
+                :filter "agTextColumnFilter"
+                :floatingFilter true}
+               {:field "abundance_5_fraction_total_reads"
+                :maxWidth 120
+                :headerName "Abundance (%)"
+                :sortable true
+                :resizable true
+                :filter "agNumberColumnFilter"
+                :type "numericColumn"
+                :floatingFilter true}]}])
+
+;; Species Abundance Table Component
 
 (defn library-species-abundance-table
   "Component for displaying species abundance data."
   []
   (let [grid-ref (clj->js {:current nil})
-        add-bracken-link #(assoc % :bracken_link (str "data/bracken-species-abundances/" (:run_id %) "/" (:library_id %) "_bracken_species_abundances.tsv"))
         currently-selected-run-id (:selected-run-id @db)
         selected-run-species-abundance (get-in @db [:species-abundance currently-selected-run-id])
         row-data (->> selected-run-species-abundance
@@ -538,10 +575,11 @@
        {:ref grid-ref
         :columnDefs library-species-abundance-column-defs
         :rowData row-data
+        :theme "legacy"
         :pagination false
         :enableCellTextSelection true
         :onFirstDataRendered #(-> % .-api .sizeColumnsToFit)
         :onSelectionChanged #()}
        ]]
      [:div {:style {:grid-row "2"}}
-      [:button {:onClick #(.exportDataAsCsv (.-api (.-current grid-ref)) (clj->js {:fileName (str currently-selected-run-id "_species_abundance.csv")}))} "Export CSV"]]]))
+      [:button {:onClick #(export-library-species-abundance-table grid-ref currently-selected-run-id)} "Export CSV"]]]))
