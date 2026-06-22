@@ -5,7 +5,7 @@
             [routine-sequence-qc.loaders :as loaders]
             [routine-sequence-qc.components :as components]))
 
-(def app-version "v3.4.1")
+(def app-version "v3.5.0")
 
 (defn app
   "Root app component."
